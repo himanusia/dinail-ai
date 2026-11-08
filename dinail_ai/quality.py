@@ -29,7 +29,7 @@ def metrics(img: np.ndarray) -> dict[str, Any]:
     """Metrik kualitas pada salinan <=1024 px, plus dimensi asli."""
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    f = min(1.0, 1024 / max(h, w))
+    f = min(1.0, QUALITY["sharpness_target_px"] / max(h, w))
     g = cv2.resize(gray, (int(w * f), int(h * f)), interpolation=cv2.INTER_AREA) if f < 1.0 else gray
 
     gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)
@@ -52,9 +52,7 @@ def metrics(img: np.ndarray) -> dict[str, Any]:
         "min_side": int(min(h, w)),
         "sharpness": round(sharpness, 1),
         "sharpness_global": round(float(np.percentile(mag, 99.5)), 1),
-        "blur_var": round(float(cv2.Laplacian(g, cv2.CV_64F).var()), 2),
         "brightness": round(float(gray.mean()), 2),
-        "contrast_std": round(float(gray.std()), 2),
     }
 
 

@@ -57,7 +57,7 @@ def coin_crop(coin_path: Path) -> np.ndarray:
     """Potong foto koin tepat di tepi luarnya, supaya margin putih di foto tidak ikut
     masuk dan tepi koin di scene = tepi yang digambar (ground truth eksak)."""
     sys.path.insert(0, str(ROOT))
-    from dinail_ai import detect  # noqa: PLC0415
+    from dinail_ai import detect
 
     cache = FIX / f"crop_{coin_path.stem}.png"
     if cache.exists():
@@ -68,7 +68,7 @@ def coin_crop(coin_path: Path) -> np.ndarray:
     s = min(1.0, 1100.0 / max(h, w))
     small = cv2.resize(src, None, fx=s, fy=s, interpolation=cv2.INTER_AREA) if s < 1.0 else src
     g = cv2.medianBlur(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), 7)
-    hs, ws = g.shape
+    hs, _ws = g.shape
     circles = cv2.HoughCircles(g, cv2.HOUGH_GRADIENT, dp=1.1, minDist=hs * 0.5, param1=110,
                                param2=50, minRadius=int(hs * 0.25), maxRadius=int(hs * 0.60))
     if circles is None:
@@ -77,8 +77,8 @@ def coin_crop(coin_path: Path) -> np.ndarray:
     cx, cy, r = detect.refine_circle(detect.gradient_mag(g), cx, cy, r)
     cx, cy, r = cx / s, cy / s, r / s
 
-    x0, y0 = int(round(cx - r)), int(round(cy - r))
-    side = int(round(2 * r))
+    x0, y0 = round(cx - r), round(cy - r)
+    side = round(2 * r)
     x0 = max(0, min(x0, w - side))
     y0 = max(0, min(y0, h - side))
     crop = src[y0:y0 + side, x0:x0 + side]
@@ -94,11 +94,11 @@ def make_scene(coin_path: Path, d_mm: float, px_per_mm: float, nail_mm: float, s
     bg = _table_texture(seed, H, W)
 
     R = d_mm * px_per_mm / 2.0
-    D = int(round(2 * R))
+    D = round(2 * R)
     coin = cv2.resize(coin_crop(coin_path), (D, D), interpolation=cv2.INTER_AREA)
 
     mask = np.zeros((D, D), np.uint8)
-    cv2.circle(mask, (D // 2, D // 2), int(round(R)), 255, -1)
+    cv2.circle(mask, (D // 2, D // 2), round(R), 255, -1)
     mask_f = cv2.GaussianBlur(mask.astype(np.float32) / 255.0, (0, 0), 0.8)[..., None]
 
     cx, cy = int(W * 0.70), int(H * 0.45)
@@ -113,8 +113,8 @@ def make_scene(coin_path: Path, d_mm: float, px_per_mm: float, nail_mm: float, s
     bg = np.clip(bg.astype(np.float32) * (1 - 0.18 * shadow[..., None]), 0, 255).astype(np.uint8)
 
     # "kuku" berlebar nail_mm (ground truth eksak)
-    w_px = int(round(nail_mm * px_per_mm))
-    h_px = int(round(w_px * 1.45))
+    w_px = round(nail_mm * px_per_mm)
+    h_px = round(w_px * 1.45)
     nx, ny = int(W * 0.20), int(H * 0.36)
     color = (198, 186, 214)
     cv2.rectangle(bg, (nx, ny), (nx + w_px, ny + h_px), color, -1)

@@ -1,7 +1,7 @@
 """Buat foto contoh + gambar hasil anotasi untuk README (ikut di-commit, bukan fixture uji).
 
 Masukan: fixtures/*.jpg (dibuat oleh scripts/make_fixtures.py, tidak di-commit).
-Keluaran: samples/contoh-*.jpg (foto masukan) dan samples/hasil-*.jpg (anotasi) + .result.json.
+Keluaran: samples/contoh-*.jpg (foto masukan) dan samples/hasil-*.jpg (anotasi).
 
 Semua foto contoh adalah scene sintetis buatan scripts/make_fixtures.py: koin digambar dengan
 radius pasti, teksturnya dari foto koin domain publik Wikimedia Commons. Bukan foto pelanggan.
@@ -9,7 +9,6 @@ radius pasti, teksturnya dari foto koin domain publik Wikimedia Commons. Bukan f
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -20,7 +19,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from dinail_ai.analyze import analyze  # noqa: E402
+from dinail_ai.analyze import analyze
 
 FIX = ROOT / "fixtures"
 OUT = ROOT / "samples"
@@ -65,7 +64,7 @@ def annotate(img: np.ndarray, res, title: str, object_label: str = "objek uji") 
 
     if res.scale_px_per_mm:
         text = f"skala {res.scale_px_per_mm:.2f} px/mm"
-        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+        (tw, _th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
         cv2.rectangle(out, (24, img.shape[0] - 72), (36 + tw, img.shape[0] - 44), (0, 0, 0), -1)
         cv2.putText(out, text, (30, img.shape[0] - 52),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
@@ -102,10 +101,6 @@ def main() -> int:
         cv2.imwrite(str(OUT / f"hasil-{name.split('-', 2)[2]}.jpg"), annotated,
                     [cv2.IMWRITE_JPEG_QUALITY, 88])
 
-        payload = res.as_dict()
-        payload["elapsed_ms"] = None  # latensi tidak relevan untuk contoh statis
-        (OUT / f"{name}.result.json").write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"{name}: ok={res.ok} scale={res.scale_px_per_mm} reasons={res.quality['reasons']}")
 
     for name, src, title in REAL_CASES:

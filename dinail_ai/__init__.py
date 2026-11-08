@@ -1,1 +1,1 @@
-__all__ = ["core", "coins", "app"]
+__all__ = ["analyze", "coins", "detect", "quality", "sizes"]

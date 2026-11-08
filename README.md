@@ -43,10 +43,9 @@ foto tangan + koin
 | `dinail_ai/app.py` | FastAPI: `/v1/analyze`, `/health`, `/v1/size-table`, halaman `/` |
 | `scripts/make_fixtures.py` | pembuat scene uji ber-ground-truth + crop foto koin |
 | `scripts/make_samples.py` | pembuat foto contoh + gambar anotasi hasil untuk README |
-| `samples/` | foto contoh sintetis (`contoh-*.jpg`), gambar hasil (`hasil-*.jpg`), JSON hasil (`*.result.json`) |
+| `samples/` | foto contoh sintetis (`contoh-*.jpg`) dan gambar hasil anotasinya (`hasil-*.jpg`) |
 | `samples/real/` | tiga foto tangan asli (CC BY 2.0) untuk uji regresi, plus anotasi dan atribusi |
 | `tests/` | 46 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
-| `samples/contoh-*.result.json` | keluaran JSON asli untuk tiap foto contoh |
 
 ## Jalankan
 
@@ -138,9 +137,7 @@ curl -X POST http://localhost:8000/v1/analyze \
     "min_side": 1200,
     "sharpness": 497.7,
     "sharpness_global": 201.4,
-    "blur_var": 53.84,
-    "brightness": 211.05,
-    "contrast_std": 19.99
+    "brightness": 211.05
   },
   "coin": {
     "found": true,
@@ -166,7 +163,7 @@ curl -X POST http://localhost:8000/v1/analyze \
     }
   },
   "warnings": [],
-  "elapsed_ms": 199.2
+  "elapsed_ms": 145.3
 }
 ```
 
@@ -195,15 +192,13 @@ curl -X POST http://localhost:8000/v1/analyze \
     "min_side": 1200,
     "sharpness": 51.3,
     "sharpness_global": 31.1,
-    "blur_var": 0.37,
-    "brightness": 212.93,
-    "contrast_std": 11.65
+    "brightness": 212.93
   },
   "coin": null,
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 51.7
+  "elapsed_ms": 41.9
 }
 ```
 
@@ -227,9 +222,7 @@ curl -X POST http://localhost:8000/v1/analyze \
     "min_side": 1200,
     "sharpness": 494.7,
     "sharpness_global": 26.9,
-    "blur_var": 15.79,
-    "brightness": 213.75,
-    "contrast_std": 9.51
+    "brightness": 213.75
   },
   "coin": {
     "found": true,
@@ -247,7 +240,7 @@ curl -X POST http://localhost:8000/v1/analyze \
   "scale_px_per_mm": 4.5567,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 75.6
+  "elapsed_ms": 59.5
 }
 ```
 
@@ -275,9 +268,7 @@ curl -X POST http://localhost:8000/v1/analyze \
     "min_side": 1200,
     "sharpness": 461.8,
     "sharpness_global": 222.2,
-    "blur_var": 60.9,
-    "brightness": 208.79,
-    "contrast_std": 25.22
+    "brightness": 208.79
   },
   "coin": {
     "found": true,
@@ -293,7 +284,7 @@ curl -X POST http://localhost:8000/v1/analyze \
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 298.7
+  "elapsed_ms": 165.8
 }
 ```
 
@@ -387,6 +378,19 @@ keluar frame tidak dihitung, jadi koin yang terpotong ditolak karena alasan yang
 
 Yang **belum** terukur dan tidak diklaim: selisih milimeter pada foto pelanggan dinail.co.
 Untuk itu perlu foto berlabel dari pemilik plus penggaris sebagai pembanding.
+
+## Evaluasi pada foto pemilik
+
+Paket data pemilik (32 foto tangan + `metadata_foto.csv` berisi pusat dan diameter koin per
+foto) **tidak ada di repo ini** karena berisi tangan pelanggan. Skrip evaluasinya ada, jalankan
+di mesin yang punya paket data:
+
+```bash
+python scripts/eval_real.py --data-dir ~/Downloads/dinail_data_siap_pakai --out eval
+```
+
+Keluarannya `eval/report.json`: ringkasan (tingkat deteksi, median/p90 selisih diameter koin)
+dan satu baris per foto. Foto tidak disalin dan `eval/` tidak di-commit.
 
 ## Kontrak API
 

@@ -27,7 +27,6 @@ class Candidate:
     r: float
     score: float
     edge: float
-    contrast: float
 
 
 def resize_for_detection(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
@@ -36,7 +35,7 @@ def resize_for_detection(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarra
     if m <= max_side:
         return img
     f = max_side / m
-    return cv2.resize(img, (int(round(w * f)), int(round(h * f))), interpolation=cv2.INTER_AREA)
+    return cv2.resize(img, (round(w * f), round(h * f)), interpolation=cv2.INTER_AREA)
 
 
 def gradient_mag(gray: np.ndarray) -> np.ndarray:
@@ -50,8 +49,8 @@ def edge_support(mag: np.ndarray, cx: float, cy: float, r: float, n: int = 180) 
     h, w = mag.shape
     vals = []
     for t in np.linspace(0, 2 * math.pi, n, endpoint=False):
-        x = int(round(cx + r * math.cos(t)))
-        y = int(round(cy + r * math.sin(t)))
+        x = round(cx + r * math.cos(t))
+        y = round(cy + r * math.sin(t))
         if 0 <= x < w and 0 <= y < h:
             vals.append(float(mag[y, x]))
     if not vals:
@@ -179,7 +178,7 @@ def detect_coin(img: np.ndarray) -> tuple[Candidate | None, list[Candidate]]:
             if cov < MIN_COVERAGE or min_quad < MIN_QUADRANT:
                 continue  # bukan lingkaran tertutup: busur tangan, bayangan, tepi meja
             score = 0.45 * cov + 0.30 * e + 0.25 * c
-            cands.append(Candidate(float(cx), float(cy), float(r), float(score), e, c))
+            cands.append(Candidate(float(cx), float(cy), float(r), float(score), e))
 
     cands.sort(key=lambda k: k.score, reverse=True)
     best = cands[0] if cands and cands[0].score >= MIN_SCORE else None

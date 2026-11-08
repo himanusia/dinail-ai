@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["venv", ".git", "samples", "fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "RUF", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# File(...)/Form(...) di signature endpoint adalah idioma FastAPI, bukan bug.
+"dinail_ai/app.py" = ["B008"]
+# Skrip menyisipkan sys.path sebelum mengimpor paket lokal.
+"scripts/*.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

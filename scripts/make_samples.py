@@ -40,7 +40,7 @@ CASES = [
 ]
 
 
-def annotate(img: np.ndarray, res, title: str) -> np.ndarray:
+def annotate(img: np.ndarray, res, title: str, object_label: str = "objek uji") -> np.ndarray:
     out = img.copy()
     ok = res.ok
     color = (60, 150, 60) if ok else (40, 60, 200)
@@ -60,8 +60,8 @@ def annotate(img: np.ndarray, res, title: str) -> np.ndarray:
         cv2.line(out, (x0, y), (x1, y), (30, 30, 200), 3)
         for x in (x0, x1):
             cv2.line(out, (x, y - 12), (x, y + 12), (30, 30, 200), 3)
-        cv2.putText(out, f"{res.nail['width_mm']} mm", (x0, y - 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (30, 30, 200), 2)
+        cv2.putText(out, f"{res.nail['width_mm']} mm ({object_label})", (x0, y - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.62, (30, 30, 200), 2)
 
     if res.scale_px_per_mm:
         text = f"skala {res.scale_px_per_mm:.2f} px/mm"
@@ -96,7 +96,9 @@ def main() -> int:
         res = analyze(data, coin=coin, nail_width_px=nail_px)
 
         shutil.copyfile(src_path, OUT / f"{name}.jpg")
-        annotated = annotate(cv2.imread(str(src_path)), res, title)
+        # scene sintetis: objeknya kotak pengganti kuku, jangan diberi label "kuku"
+        annotated = annotate(cv2.imread(str(src_path)), res,
+                             f"{title} (scene sintetis, bukan kuku)", "objek uji")
         cv2.imwrite(str(OUT / f"hasil-{name.split('-', 2)[2]}.jpg"), annotated,
                     [cv2.IMWRITE_JPEG_QUALITY, 88])
 

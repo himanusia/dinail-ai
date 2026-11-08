@@ -1,7 +1,8 @@
-"""Deteksi patokan koin dengan HoughCircles, lalu skor kandidat.
+"""Deteksi patokan koin: Hough kasar lalu refine sub-piksel ke rim luar.
 
-Catatan: radius dari Hough masih kuantisasi akumulator (meleset 4-6%), jadi angka ini baru
-cukup untuk memastikan "ada koin", belum untuk skala mm. Refine sub-piksel menyusul.
+Kenapa dua tahap: HoughCircles meleset 4-6% karena kuantisasi akumulator, dan koin rupiah
+punya cincin dekoratif di dalam tepi yang gradiennya lebih kuat daripada siluetnya. Refine
+menelusuri puncak gradien per sudut, memilih radius LUAR, lalu mencocokkan lingkaran.
 """
 
 from __future__ import annotations
@@ -68,6 +69,54 @@ def contrast(gray: np.ndarray, cx: float, cy: float, r: float) -> float:
     return float(min(1.0, d / 90.0))
 
 
+def refine_circle(mag: np.ndarray, cx: float, cy: float, r: float) -> tuple[float, float, float]:
+    """Perbaiki lingkaran Hough dengan menelusuri puncak gradien radial di 360 sudut."""
+    angles = np.linspace(0, 2 * math.pi, 360, endpoint=False)
+    radii = np.arange(max(3.0, r * 0.85), r * 1.15, 0.4, dtype=np.float32)
+    xs = (cx + np.cos(angles)[:, None] * radii[None, :]).astype(np.float32)
+    ys = (cy + np.sin(angles)[:, None] * radii[None, :]).astype(np.float32)
+    samp = cv2.remap(mag, xs, ys, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
+    # Puncak paling LUAR per sudut (rim koin), bukan puncak global (bisa cincin dekoratif).
+    peak_val = samp.max(axis=1)
+    mask = samp >= (0.62 * peak_val)[:, None]
+    idx = np.where(mask, np.arange(samp.shape[1])[None, :], -1).max(axis=1)
+    ok = idx > 0
+    idx = np.where(ok, idx, 0)
+
+    # Sub-piksel: parabola lewat 3 sampel di sekitar puncak.
+    i0 = np.clip(idx - 1, 0, samp.shape[1] - 1)
+    i2 = np.clip(idx + 1, 0, samp.shape[1] - 1)
+    rows = np.arange(len(angles))
+    y0, y1, y2 = samp[rows, i0], samp[rows, idx], samp[rows, i2]
+    denom = y0 - 2 * y1 + y2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        delta = np.where(np.abs(denom) > 1e-3, 0.5 * (y0 - y2) / denom, 0.0)
+    delta = np.nan_to_num(delta, nan=0.0, posinf=0.0, neginf=0.0)
+    step = float(radii[1] - radii[0]) if len(radii) > 1 else 1.0
+    rr = radii[idx] + np.clip(delta, -0.5, 0.5).astype(np.float32) * step
+
+    keep = ok & (peak_val >= np.percentile(peak_val[ok], 40) if ok.any() else ok)
+    if keep.sum() < 30:
+        return cx, cy, r
+
+    px = (cx + np.cos(angles) * rr)[keep]
+    py = (cy + np.sin(angles) * rr)[keep]
+
+    # Kasa algebraic circle fit
+    a = np.column_stack([px, py, np.ones_like(px)])
+    b = px ** 2 + py ** 2
+    sol, *_ = np.linalg.lstsq(a, b, rcond=None)
+    ncx, ncy = sol[0] / 2, sol[1] / 2
+    nr = math.sqrt(max(1e-6, sol[2] + ncx ** 2 + ncy ** 2))
+
+    # Jangan menerima "perbaikan" yang liar. Hough meleset sampai ~6%, jadi 10% cukup lega;
+    # lebih dari itu artinya tidak ada tepi yang jelas dan usulan awal lebih jujur.
+    if not (0.9 * r <= nr <= 1.1 * r) or math.hypot(ncx - cx, ncy - cy) > 0.15 * r:
+        return cx, cy, r
+    return float(ncx), float(ncy), float(nr)
+
+
 def detect_coin(img: np.ndarray) -> tuple[Candidate | None, list[Candidate]]:
     """Cari koin patokan. Mengembalikan kandidat terbaik (atau None) dan alternatifnya."""
     small = resize_for_detection(img)
@@ -91,6 +140,7 @@ def detect_coin(img: np.ndarray) -> tuple[Candidate | None, list[Candidate]]:
     cands: list[Candidate] = []
     if circles is not None:
         for cx, cy, r in np.round(circles[0], 1)[:8]:
+            cx, cy, r = refine_circle(mag, float(cx), float(cy), float(r))
             e = edge_support(mag, cx, cy, r)
             c = contrast(gray, cx, cy, r)
             cands.append(Candidate(float(cx), float(cy), float(r), 0.65 * e + 0.35 * c, e, c))

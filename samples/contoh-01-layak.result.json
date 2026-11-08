@@ -1,0 +1,65 @@
+{
+  "ok": true,
+  "quality": {
+    "pass": true,
+    "reasons": [],
+    "width": 1600,
+    "height": 1200,
+    "min_side": 1200,
+    "sharpness": 497.7,
+    "sharpness_global": 201.4,
+    "blur_var": 53.84,
+    "brightness": 211.05,
+    "contrast_std": 19.99
+  },
+  "coin": {
+    "found": true,
+    "center_px": [
+      1120.3,
+      541.2
+    ],
+    "radius_px": 121.2,
+    "diameter_px": 242.4,
+    "score": 0.843,
+    "alternatives": [
+      {
+        "center_px": [
+          1315.0,
+          320.7
+        ],
+        "radius_px": 325.2,
+        "score": 0.074
+      },
+      {
+        "center_px": [
+          1298.7,
+          805.6
+        ],
+        "radius_px": 337.2,
+        "score": 0.069
+      },
+      {
+        "center_px": [
+          896.0,
+          290.4
+        ],
+        "radius_px": 376.7,
+        "score": 0.068
+      }
+    ],
+    "type": "500",
+    "diameter_mm": 27.0
+  },
+  "scale_px_per_mm": 8.9785,
+  "nail": {
+    "width_px": 118.8,
+    "width_mm": 13.23,
+    "suggestion": {
+      "size": null,
+      "reason": "tabel konversi ukuran pemilik belum diisi",
+      "needs_admin_check": true
+    }
+  },
+  "warnings": [],
+  "elapsed_ms": null
+}

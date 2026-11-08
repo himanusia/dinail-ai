@@ -42,7 +42,10 @@ foto tangan + koin
 | `dinail_ai/analyze.py` | orkestrasi satu foto: kualitas → deteksi → skala → saran |
 | `dinail_ai/app.py` | FastAPI: `/v1/analyze`, `/health`, `/v1/size-table`, halaman `/` |
 | `scripts/make_fixtures.py` | pembuat scene uji ber-ground-truth + crop foto koin |
+| `scripts/make_samples.py` | pembuat foto contoh + gambar anotasi hasil untuk README |
+| `samples/` | foto contoh (`contoh-*.jpg`), gambar hasil (`hasil-*.jpg`), JSON hasil (`*.result.json`) |
 | `tests/` | 42 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
+| `samples/contoh-*.result.json` | keluaran JSON asli untuk tiap foto contoh |
 
 ## Jalankan
 
@@ -57,13 +60,44 @@ python3.12 -m venv venv          # python >=3.10; 3.9 tidak punya wheel numpy>=2
 Buka `http://localhost:8000` untuk halaman unggah, atau `http://localhost:8000/docs` untuk
 Swagger. Demo daring: <https://dinail.himanusia.com> (mesin uji, bisa mati kapan saja).
 
+## Contoh foto & hasil
+
+Empat foto contoh ikut di repo (`samples/`), jadi perintah `curl` di bawah bisa langsung
+dijalankan setelah `uvicorn` nyala. Semuanya **scene sintetis** buatan
+`scripts/make_fixtures.py`: koin digambar pada radius pasti dengan tekstur foto koin domain
+publik, plus satu bentuk pengganti kuku berukuran pasti. Bukan foto pelanggan dinail.co —
+foto asli tidak dipublikasikan karena privasi.
+
+**Foto layak** (`samples/contoh-01-layak.jpg`) → **hasil** (`samples/hasil-layak.jpg`)
+
+| masukan | hasil |
+|---|---|
+| ![Foto contoh layak](samples/contoh-01-layak.jpg) | ![Hasil anotasi](samples/hasil-layak.jpg) |
+
+**Foto buram** (`samples/contoh-02-buram.jpg`) → ditolak
+
+| masukan | hasil |
+|---|---|
+| ![Foto contoh buram](samples/contoh-02-buram.jpg) | ![Hasil anotasi](samples/hasil-buram.jpg) |
+
+**Koin terlalu kecil** (`samples/contoh-03-koin-kecil.jpg`) dan **jenis koin tidak dipilih**
+(`samples/contoh-04-tanpa-jenis-koin.jpg`):
+
+| masukan | hasil |
+|---|---|
+| ![Koin kecil](samples/contoh-03-koin-kecil.jpg) | ![Hasil koin kecil](samples/hasil-koin-kecil.jpg) |
+| ![Tanpa jenis koin](samples/contoh-04-tanpa-jenis-koin.jpg) | ![Hasil tanpa jenis koin](samples/hasil-tanpa-jenis-koin.jpg) |
+
+Gambar hasil dan JSON di bawah dibuat oleh `scripts/make_samples.py` dengan memanggil pipeline
+yang sama seperti layanan, bukan ditulis tangan.
+
 ## Contoh input & output
 
 ### 1. Foto layak, koin Rp500
 
 ```bash
 curl -X POST http://localhost:8000/v1/analyze \
-  -F "image=@foto-tangan.jpg;type=image/jpeg" \
+  -F "image=@samples/contoh-01-layak.jpg;type=image/jpeg" \
   -F "coin=500" \
   -F "nail_width_px=118.8"
 ```
@@ -118,7 +152,7 @@ tabel konversi pemilik belum diisi — layanan sengaja tidak menebak.
 
 ```bash
 curl -X POST http://localhost:8000/v1/analyze \
-  -F "image=@foto-buram.jpg;type=image/jpeg" -F "coin=500"
+  -F "image=@samples/contoh-02-buram.jpg;type=image/jpeg" -F "coin=500"
 ```
 
 ```json
@@ -151,7 +185,7 @@ curl -X POST http://localhost:8000/v1/analyze \
 
 ```bash
 curl -X POST http://localhost:8000/v1/analyze \
-  -F "image=@foto-koin-kecil.jpg;type=image/jpeg" -F "coin=100"
+  -F "image=@samples/contoh-03-koin-kecil.jpg;type=image/jpeg" -F "coin=100"
 ```
 
 ```json
@@ -195,7 +229,7 @@ pada 4,5 px/mm satu piksel galat tepi sudah setara sepersekian nomor ukuran.
 
 ```bash
 curl -X POST http://localhost:8000/v1/analyze \
-  -F "image=@foto-tangan.jpg;type=image/jpeg" -F "nail_width_px=186"
+  -F "image=@samples/contoh-04-tanpa-jenis-koin.jpg;type=image/jpeg" -F "nail_width_px=186"
 ```
 
 ```json

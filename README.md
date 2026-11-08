@@ -1,14 +1,35 @@
-# dinail AI — layanan cek foto ukuran kuku
+# dinail AI — cek foto ukuran kuku
 
-Bagian AI dari capstone Asah 2026 (tim A26-CS222, UMKM dinail.co). Layanan ini menerima
-foto tangan + koin patokan, memeriksa kualitas foto, mendeteksi koin, menghitung skala
-piksel→mm, lalu menyarankan nomor ukuran memakai tabel konversi pemilik.
+Layanan untuk UMKM press-on nails **dinail.co**: customer memotret tangannya bersama koin
+sebagai patokan ukuran, lalu sistem memeriksa apakah fotonya layak, mendeteksi koin,
+menghitung skala piksel→mm, dan menyarankan nomor ukuran memakai tabel konversi milik pemilik.
 
-Status: **v0.1 jalan di `https://dinail.himanusia.com`** (InstaBox sandbox + Cloudflare Tunnel).
+Bagian AI dari capstone **Asah 2026 (tim A26-CS222)**. Ini layanan backend (HTTP API) plus
+satu halaman HTML untuk uji manual; halaman pemesanan, antrian admin, dan dashboard pemilik
+dikerjakan tim FS dan memanggil endpoint di sini.
 
-Ini **layanan backend (HTTP API)** plus satu halaman HTML tanpa build step untuk uji manual.
-Tidak ada database, tidak ada framework frontend: halaman pemesanan, antrian admin, dan
-dashboard pemilik tetap milik FS dan memanggil endpoint di sini.
+Prinsip yang dipegang: **hasil AI selalu saran**. Setiap respons membawa angka mentah
+(piksel, mm, skor) supaya bisa diaudit, dan selalu `needs_admin_check: true` karena admin
+yang mengonfirmasi pesanan.
+
+## Masalah yang diselesaikan
+
+Info desain dan ukuran dikumpulkan manual lewat chat, dan customer mengirim foto ukuran kuku
+dengan patokan koin. Foto sering miring, buram, atau tanpa patokan, sehingga konfirmasi lama
+dan ukuran berisiko meleset. Layanan ini menolak foto yang tidak layak **sejak awal** dengan
+alasan yang bisa ditindaklanjuti, lalu memberi saran ukuran yang tetap dicek admin.
+
+## Alur
+
+```
+foto tangan + koin
+   │
+   ├─ gerbang kualitas  → buram / gelap / kekecilan / koin tidak ada  → tolak + alasan
+   ├─ deteksi koin      → Hough kasar → refine sub-piksel ke rim luar
+   ├─ skala             → px/mm = diameter koin (px) / diameter resmi (mm)
+   ├─ konversi          → lebar kuku (px) ÷ skala = mm
+   └─ tabel pemilik     → nomor ukuran (S/M/L/…) atau "belum diisi"
+```
 
 ## Struktur
 
@@ -23,18 +44,268 @@ dashboard pemilik tetap milik FS dan memanggil endpoint di sini.
 | `scripts/make_fixtures.py` | pembuat scene uji ber-ground-truth + crop foto koin |
 | `tests/` | 42 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
 
-## Apa yang sudah dikerjakan
+## Jalankan
 
-| Bagian | Status | Catatan |
+```bash
+python3.12 -m venv venv          # python >=3.10; 3.9 tidak punya wheel numpy>=2.1
+./venv/bin/pip install -r requirements.txt
+./venv/bin/python scripts/make_fixtures.py   # fixture uji (sekali, ~10 s)
+./venv/bin/python -m pytest -q               # 42 uji, ~35 s
+./venv/bin/uvicorn dinail_ai.app:app --port 8000
+```
+
+Buka `http://localhost:8000` untuk halaman unggah, atau `http://localhost:8000/docs` untuk
+Swagger. Demo daring: <https://dinail.himanusia.com> (mesin uji, bisa mati kapan saja).
+
+## Contoh input & output
+
+### 1. Foto layak, koin Rp500
+
+```bash
+curl -X POST http://localhost:8000/v1/analyze \
+  -F "image=@foto-tangan.jpg;type=image/jpeg" \
+  -F "coin=500" \
+  -F "nail_width_px=118.8"
+```
+
+```json
+{
+  "ok": true,
+  "quality": {
+    "pass": true,
+    "reasons": [],
+    "width": 1600,
+    "height": 1200,
+    "min_side": 1200,
+    "sharpness": 497.7,
+    "sharpness_global": 201.4,
+    "blur_var": 53.84,
+    "brightness": 211.05,
+    "contrast_std": 19.99
+  },
+  "coin": {
+    "found": true,
+    "center_px": [1120.3, 541.2],
+    "radius_px": 121.2,
+    "diameter_px": 242.4,
+    "score": 0.843,
+    "alternatives": [
+      {"center_px": [1315.0, 320.7], "radius_px": 325.2, "score": 0.074}
+    ],
+    "type": "500",
+    "diameter_mm": 27.0
+  },
+  "scale_px_per_mm": 8.9785,
+  "nail": {
+    "width_px": 118.8,
+    "width_mm": 13.23,
+    "suggestion": {
+      "size": null,
+      "reason": "tabel konversi ukuran pemilik belum diisi",
+      "needs_admin_check": true
+    }
+  },
+  "warnings": [],
+  "elapsed_ms": 550.9
+}
+```
+
+Fotonya asli 1600×1200 dengan koin 242,4 px; skala sebenarnya 9,0 px/mm, jadi error skala
+0,24% dan lebar kuku 13,23 mm (sebenarnya 13,2 mm). `suggestion.size` masih `null` karena
+tabel konversi pemilik belum diisi — layanan sengaja tidak menebak.
+
+### 2. Foto buram
+
+```bash
+curl -X POST http://localhost:8000/v1/analyze \
+  -F "image=@foto-buram.jpg;type=image/jpeg" -F "coin=500"
+```
+
+```json
+{
+  "ok": false,
+  "quality": {
+    "pass": false,
+    "reasons": [
+      "Foto buram (ketajaman 51, minimal 150). Pegang kamera lebih stabil atau dekatkan cahaya.",
+      "Patokan koin tidak terdeteksi: letakkan koin datar di samping tangan."
+    ],
+    "width": 1600,
+    "height": 1200,
+    "min_side": 1200,
+    "sharpness": 51.3,
+    "sharpness_global": 31.1,
+    "blur_var": 0.37,
+    "brightness": 212.93,
+    "contrast_std": 11.65
+  },
+  "coin": null,
+  "scale_px_per_mm": null,
+  "nail": null,
+  "warnings": [],
+  "elapsed_ms": 62.6
+}
+```
+
+### 3. Koin kekecilan di frame
+
+```bash
+curl -X POST http://localhost:8000/v1/analyze \
+  -F "image=@foto-koin-kecil.jpg;type=image/jpeg" -F "coin=100"
+```
+
+```json
+{
+  "ok": false,
+  "quality": {
+    "pass": false,
+    "reasons": [
+      "Koin terlalu kecil di foto (diameter 105 px). Dekatkan kamera supaya koin minimal 12% lebar foto."
+    ],
+    "width": 1600,
+    "height": 1200,
+    "min_side": 1200,
+    "sharpness": 494.7,
+    "sharpness_global": 26.9,
+    "blur_var": 15.79,
+    "brightness": 213.75,
+    "contrast_std": 9.51
+  },
+  "coin": {
+    "found": true,
+    "center_px": [1119.7, 539.9],
+    "radius_px": 52.4,
+    "diameter_px": 104.8,
+    "score": 0.977,
+    "alternatives": [],
+    "type": "100",
+    "diameter_mm": 23.0
+  },
+  "scale_px_per_mm": 4.5567,
+  "nail": null,
+  "warnings": [],
+  "elapsed_ms": 216.9
+}
+```
+
+Koin tetap terdeteksi dan skalanya dihitung; yang menolak adalah gerbang kualitas, karena
+pada 4,5 px/mm satu piksel galat tepi sudah setara sepersekian nomor ukuran.
+
+### 4. Jenis koin tidak dipilih
+
+```bash
+curl -X POST http://localhost:8000/v1/analyze \
+  -F "image=@foto-tangan.jpg;type=image/jpeg" -F "nail_width_px=186"
+```
+
+```json
+{
+  "ok": false,
+  "quality": {
+    "pass": false,
+    "reasons": [
+      "Jenis koin belum dipilih (koin 24 mm vs 25 mm tidak bisa dibedakan dari ukuran saja).",
+      "Lebar kuku tidak bisa dikonversi ke mm tanpa skala koin."
+    ],
+    "width": 1600,
+    "height": 1200,
+    "min_side": 1200,
+    "sharpness": 461.8,
+    "sharpness_global": 222.2,
+    "blur_var": 60.9,
+    "brightness": 208.79,
+    "contrast_std": 25.22
+  },
+  "coin": {
+    "found": true,
+    "center_px": [1120.3, 541.7],
+    "radius_px": 149.4,
+    "diameter_px": 298.9,
+    "score": 0.772,
+    "alternatives": [
+      {"center_px": [896.0, 328.7], "radius_px": 348.8, "score": 0.073},
+      {"center_px": [1352.1, 821.8], "radius_px": 418.6, "score": 0.072},
+      {"center_px": [1368.3, 355.7], "radius_px": 377.6, "score": 0.062}
+    ],
+    "type": null
+  },
+  "scale_px_per_mm": null,
+  "nail": null,
+  "warnings": [],
+  "elapsed_ms": 544.0
+}
+```
+
+Rp200 (25 mm) dan Rp1000 (24 mm) hanya beda 1 mm, jadi jenis koin wajib dipilih di form,
+bukan ditebak dari ukuran. Kalau valuenya di luar daftar:
+
+```json
+{"ok": false,
+ "quality": {"pass": false,
+   "reasons": ["Jenis koin tidak dikenal: '2000'. Pilih Rp50, Rp100, Rp200, Rp500, atau Rp1000."]}}
+```
+
+### 5. Setelah tabel konversi pemilik diisi
+
+Tabel diletakkan di `dinail_ai/size_table.json` (lihat `size_table.example.json`):
+
+```json
+{
+  "source": "pemilik dinail.co",
+  "updated_at": "2026-11-08",
+  "sizes": [
+    {"size": "S", "min_mm": 12.6, "max_mm": 14.0},
+    {"size": "M", "min_mm": 14.1, "max_mm": 15.5}
+  ]
+}
+```
+
+Dengan tabel itu, foto contoh nomor 1 menghasilkan:
+
+```json
+"nail": {
+  "width_px": 118.8,
+  "width_mm": 13.23,
+  "suggestion": {
+    "size": "S",
+    "range_mm": [12.6, 14.0],
+    "margin_mm": 0.63,
+    "ambiguous": false,
+    "needs_admin_check": true
+  }
+}
+```
+
+`ambiguous: true` muncul kalau lebar kuku berada kurang dari 0,5 mm dari batas nomor ukuran,
+supaya admin melihat kasus yang rawan salah.
+
+### 6. Status layanan
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/v1/size-table
+```
+
+```json
+{"status": "ok", "version": "0.1.0",
+ "coins": {"50": 20.0, "100": 23.0, "200": 25.0, "500": 27.0, "1000": 24.0},
+ "size_table_configured": false,
+ "size_table_path": "/app/dinail_ai/size_table.json"}
+
+{"configured": false, "sizes": [],
+ "note": "tabel konversi nomor ukuran dari pemilik belum diisi"}
+```
+
+### Galat input
+
+| kondisi | status | isi |
 |---|---|---|
-| Gerbang kualitas foto (buram, gelap, terlalu kecil, koin kecil/tidak ada) | jalan | tolak dengan alasan tertulis, bukan sekadar gagal |
-| Deteksi koin patokan + skala px/mm | jalan | Hough + refine sub-piksel (rim luar), error skala 0,14–0,88% pada scene ground truth |
-| Saran nomor ukuran | siap, menunggu data | butuh tabel konversi nomor ukuran dari pemilik (`size_table.json`) |
-| Deteksi kuku otomatis (segmentasi) | belum | v0.1 memakai lebar kuku (px) yang dikirim UI/admin |
-| Klasifikasi jenis koin dari gambar | belum | v0.1 memakai jenis koin yang dipilih di form (jalur cadangan di dokumen risiko) |
-| Uji pada foto dinail.co | belum | butuh 32 foto (16 sesi) + 50–100 foto berlabel dari pemilik |
+| tipe file bukan gambar | `415` | `Tipe file text/plain tidak didukung; kirim JPEG/PNG/WebP.` |
+| file kosong | `400` | `File kosong.` |
+| file > 12 MB | `413` | `Foto lebih dari 12 MB, perkecil dulu.` |
+| bytes gambar rusak | `422` | `File bukan gambar yang bisa dibaca (JPEG/PNG/WebP).` |
 
-## Kontrak API (untuk FS)
+## Kontrak API
 
 `POST /v1/analyze` — `multipart/form-data`
 
@@ -43,91 +314,70 @@ dashboard pemilik tetap milik FS dan memanggil endpoint di sini.
 | `image` | ya | JPEG/PNG/WebP, maks 12 MB |
 | `coin` | tidak | `50` \| `100` \| `200` \| `500` \| `1000` (jenis koin yang dipakai) |
 | `nail_width_px` | tidak | lebar kuku dalam piksel dari alat ukur di UI/admin |
-| `coin_diameter_px` | tidak | override kalau admin mengukur koin manual |
+| `coin_diameter_px` | tidak | jalur admin: diameter koin diukur manual kalau deteksi gagal |
 
-Respons:
-
-```json
-{
-  "ok": true,
-  "quality": {"pass": true, "reasons": [], "sharpness": 436.0, "sharpness_global": 201.2,
-              "brightness": 211.05, "width": 1600, "height": 1200, "min_side": 1200},
-  "coin": {"found": true, "center_px": [1120.3, 541.2], "radius_px": 121.2,
-           "diameter_px": 242.4, "score": 0.843, "type": "500", "diameter_mm": 27.0},
-  "scale_px_per_mm": 8.9785,
-  "nail": {"width_px": 118.8, "width_mm": 13.23,
-           "suggestion": {"size": "M", "range_mm": [12.6, 14.0], "margin_mm": 0.63,
-                          "ambiguous": false, "needs_admin_check": true}},
-  "warnings": [],
-  "elapsed_ms": 707.1
-}
-```
+Field respons: `ok`, `quality{pass, reasons, metrik}`, `coin{found, center_px, radius_px,
+diameter_px, score, type, diameter_mm, alternatives}`, `scale_px_per_mm`, `nail{width_px,
+width_mm, suggestion}`, `warnings[]`, `elapsed_ms`.
 
 - `quality.pass = false` → tampilkan `quality.reasons` apa adanya ke customer.
 - `suggestion.size = null` → tabel konversi pemilik belum diisi; jangan menebak.
-- `needs_admin_check` selalu `true`: hasil AI adalah saran, admin tetap konfirmasi.
-- Latensi terukur: 360–710 ms untuk foto 1600×1200 s.d. 3200×2400.
+- Latensi terukur: 62 ms (ditolak cepat), 217–710 ms (analisis penuh) untuk foto
+  1600×1200 s.d. 3200×2400 di 4 vCPU.
 
-`GET /health` — status, versi, diameter koin yang dipakai, status tabel konversi.
-`GET /v1/size-table` — isi tabel konversi yang sedang aktif.
+## Data yang dipakai
 
-## Diameter koin yang dipakai
+Diameter koin (sumber: Wikipedia "Uang koin rupiah"; perlu dikonfirmasi ke pemilik):
 
-Rp50 20 mm · Rp100 23 mm · Rp200 25 mm · Rp500 27 mm · Rp1000 24 mm
-(sumber: Wikipedia "Uang koin rupiah", perlu dikonfirmasi ke pemilik).
-Rp200 (25 mm) dan Rp1000 (24 mm) hanya beda 1 mm → API mengeluarkan `warnings`, dan
-jenis koin harus dipilih di form, bukan ditebak dari ukuran.
+| Nominal | Diameter | Tebal | Berat | Tahun |
+|---|---|---|---|---|
+| Rp50 | 20 mm | 2,00 mm | 1,36 g | 1999 |
+| Rp100 | 23 mm | 2,00 mm | 1,79 g | 1999, 2016 |
+| Rp200 | 25 mm | 2,20 mm | 2,38 g | 2003, 2016 |
+| Rp500 | 27 mm | 2,35 mm | 3,10 g | 2003, 2016 |
+| Rp1000 | 24 mm | 1,45 mm | 4,50 g | 2010, 2016 |
 
-## Ketajaman foto
+Ambang gerbang kualitas (`dinail_ai/quality.py`):
 
-`quality.sharpness` = persentil 99,5 gradien pada petak 128 px, diambil **petak terajam**.
-Statistik global jatuh pada foto berlatar polos (scene uji 22–48) walau tepi koinnya tajam,
-sedangkan per petak 380–510. Foto buram tetap rendah di semua petak (51–55), jadi ambang
-150 memberi jarak pisah ~8×, bukan 1,7× seperti versi global.
+| pemeriksaan | ambang | catatan |
+|---|---|---|
+| resolusi | sisi pendek ≥ 700 px | di bawah ini 1 px galat tepi = satu nomor ukuran |
+| ketajaman | ≥ 150 | p99,5 gradien per petak 128 px, diambil petak terajam |
+| kecerahan | 45–235 | rata-rata kanal abu |
+| koin ada | terdeteksi | radius mulai 3,5% sisi pendek |
+| koin cukup besar | diameter ≥ 12% sisi pendek | putuskan skala masih layak atau tidak |
 
-## Tabel konversi ukuran
+Akurasi pada 6 scene sintetis ber-ground-truth (`fixtures/ground_truth.json`). Ground truth
+dibangun dengan menggambar koin pada radius pasti, bukan diukur dengan detektor yang sama:
 
-Salin `size_table.example.json` → `dinail_ai/size_table.json` setelah pemilik memberi
-angka resmi, lalu restart container. Format: `{"sizes": [{"size": "S", "min_mm": 12.6,
-"max_mm": 14.0}, ...]}`. Tanpa berkas ini API tetap jalan, tapi saran ukuran berhenti di
-`size: null` + alasan.
+| file | koin | skala asli | terdeteksi | error | lebar asli | terdeteksi | error | vonis |
+|---|---|---|---|---|---|---|---|---|
+| g1_500 | Rp500 | 6,0 px/mm | 5,991 | 0,14% | 11,5 mm | 11,52 mm | 0,02 mm | lolos |
+| g2_500 | Rp500 | 9,0 px/mm | 8,979 | 0,24% | 13,2 mm | 13,23 mm | 0,03 mm | lolos |
+| g3_1000 | Rp1000 | 7,5 px/mm | 7,463 | 0,50% | 14,0 mm | 14,07 mm | 0,07 mm | lolos |
+| g4_200 | Rp200 | 12,0 px/mm | 11,955 | 0,38% | 15,5 mm | 15,56 mm | 0,06 mm | lolos |
+| g5_100 | Rp100 | 4,5 px/mm | 4,557 | 1,26% | 10,4 mm | 10,27 mm | 0,13 mm | ditolak (koin 105 px) |
+| g6_1000 | Rp1000 | 14,0 px/mm | 13,877 | 0,88% | 16,8 mm | 16,95 mm | 0,15 mm | lolos |
 
-## Jalankan lokal
+Angka ini mengukur **geometri dan gerbangnya**, bukan akurasi pada foto pelanggan dinail.co:
+untuk itu perlu foto berlabel dari pemilik plus penggaris sebagai pembanding.
 
-```bash
-/opt/homebrew/bin/python3.12 -m venv venv     # python 3.12; 3.9 sistem tidak punya wheel numpy>=2.1
-./venv/bin/pip install -r requirements.txt
-./venv/bin/python scripts/make_fixtures.py    # fixture uji (sekali, ~10 s)
-./venv/bin/python -m pytest -q                # 42 uji, ~35 s
-./venv/bin/uvicorn dinail_ai.app:app --port 8000
-```
+Ketajaman sengaja tidak memakai varians Laplacian: pada foto berlatar polos (meja bersih +
+satu koin tajam) variansnya jatuh ke 22–48 walau tepinya tajam, sehingga foto bagus ikut
+ditolak. Versi per petak memberi 380–510 untuk foto yang sama, sedangkan foto buram tetap
+51–55 di semua petak.
 
-`fixtures/` berisi scene sintetis ber-ground-truth (koin digambar dengan radius pasti) dan
-foto koin domain publik dari Wikimedia Commons. Error skala pada 4 scene yang lolos gerbang:
-0,14–0,88%; error lebar kuku ≤ 0,35 mm. Dua scene sengaja ditolak karena koinnya terlalu
-kecil di frame.
+## Yang belum dikerjakan
 
-## Deploy (InstaBox sandbox + Cloudflare Tunnel)
+- **Segmentasi kuku otomatis.** Lebar kuku masih dikirim UI/admin dalam piksel; scaling-nya
+  sudah benar, deteksi kukunya belum.
+- **Klasifikasi jenis koin dari gambar.** Jenis koin dipilih di form (jalur cadangan yang
+  memang sudah direncanakan di dokumen risiko proyek).
+- **Akurasi pada foto dinail.co.** Butuh 32 foto (16 sesi) + 50–100 foto berlabel pemilik.
+- **Tabel konversi nomor ukuran.** Belum diserahkan pemilik; selama kosong, saran ukuran
+  berhenti di milimeter.
 
-```bash
-instabox start box-6be75f                       # sandbox gratis 4 vCPU/8 GB
-instabox push box-6be75f . /data/home/dinail-ai -p
-instabox ssh box-6be75f -- 'cd /data/home/dinail-ai && docker build -t dinail-ai . && \
-  docker rm -f dinail-ai; docker run -d --name dinail-ai --restart unless-stopped -p 8000:8000 dinail-ai'
-# tunnel: dinail.himanusia.com -> localhost:8000 (token disimpan di Cloudflare, bukan di repo)
-instabox ssh box-6be75f -- 'docker rm -f dinail-tunnel; docker run -d --name dinail-tunnel \
-  --restart unless-stopped --network host cloudflare/cloudflared:latest tunnel --no-autoupdate run --token $TOKEN'
-```
+## Lisensi data uji
 
-Batas sandbox gratis: auto-suspend setelah 30 menit idle, maksimum 480 menit per sesi, jadi
-URL ini bukan hosting 24/7. Untuk demo/dosen cukup dihidupkan (`instabox start box-6be75f`),
-untuk produksi pindahkan ke VPS `31.97.49.76` (Dokploy) di belakang Cloudflare yang sama.
-
-## Langkah berikutnya
-
-1. Terima 32 foto dinail.co + 50–100 foto berlabel + tabel konversi pemilik; ukur akurasi
-   sesungguhnya (selisih mm vs penggaris, target selisih ≤ 1 nomor ukuran).
-2. Segmentasi kuku otomatis (MediaPipe Hands / segmentasi) supaya `nail_width_px` tidak
-   perlu diisi manual; siapkan split per customer agar tidak bocor.
-3. Klasifikasi jenis koin dari gambar (6 jenis) sebagai pengganti pilihan di form, dengan
-   laporan confusion matrix seperti yang diminta dokumen.
+Foto koin di `fixtures/` berasal dari Wikimedia Commons (domain publik) dan hanya dipakai
+untuk menguji detektor. Data penjualan dan foto pelanggan dinail.co tidak ada di repo ini.

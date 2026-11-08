@@ -15,9 +15,11 @@ import numpy as np
 
 MAX_SIDE = 1600          # px, foto diperkecil untuk deteksi saja
 MIN_RADIUS_FRAC = 0.035  # kandidat terkecil yang dicari (3,5% sisi pendek)
-MIN_SCORE = 0.42         # di bawah ini: dianggap tidak ada koin, bukan "yang terbaik dari nol"
-MIN_COVERAGE = 0.60      # fraksi keliling yang benar-benar kena tepi kuat
-MIN_QUADRANT = 0.45      # tiap kuadran harus punya tepi: koin itu lingkaran tertutup
+MIN_SCORE = 0.36         # di bawah ini: dianggap tidak ada koin, bukan "yang terbaik dari nol"
+# Ambang gerbang diturunkan dari 32 foto pemilik: pada 0,60 hanya 17/32 koin ketemu, pada 0,25
+# jadi 27/32 (median selisih diameter 1,8%). Konsekuensinya foto tangan tanpa koin bisa lolos
+# (1 dari 3 foto uji), jadi hasil tetap saran yang dicek admin.
+MIN_COVERAGE = 0.25      # fraksi keliling yang benar-benar kena tepi kuat
 
 
 @dataclass
@@ -70,13 +72,12 @@ def contrast(gray: np.ndarray, cx: float, cy: float, r: float) -> float:
     return float(min(1.0, d / 90.0))
 
 
-def coverage_profile(mag: np.ndarray, cx: float, cy: float, r: float, n: int = 360,
-                     tol: float = 0.03) -> tuple[float, float]:
-    """Fraksi keliling yang kena tepi kuat, total dan per kuadran (yang paling lemah).
+def coverage(mag: np.ndarray, cx: float, cy: float, r: float, n: int = 360,
+             tol: float = 0.03) -> float:
+    """Fraksi keliling yang benar-benar kena tepi kuat.
 
-    Koin asli = lingkaran tertutup: keempat kuadran punya tepi. Busur telapak/lekuk tangan
-    hanya menutupi sebagian keliling (kuadran 2-3 kosong), jadi min-kuadran memisahkannya
-    dari koin. Sudut yang sampelnya keluar frame tidak dihitung, bukan dianggap "tanpa tepi".
+    Sudut yang sampelnya keluar frame tidak dihitung, bukan dianggap "tanpa tepi", supaya
+    koin yang terpotong tepi foto tidak dihukum dua kali.
     """
     h, w = mag.shape
     angles = np.linspace(0, 2 * math.pi, n, endpoint=False)
@@ -89,15 +90,10 @@ def coverage_profile(mag: np.ndarray, cx: float, cy: float, r: float, n: int = 3
     vals = samp.max(axis=1)
     usable = inside.any(axis=1)
     if usable.sum() < 45:
-        return 0.0, 0.0
+        return 0.0
     thr = max(0.45 * float(np.percentile(vals[usable], 90)), 55.0)
     strong = usable & (vals >= thr)
-
-    quads = []
-    for k in range(4):
-        m = usable & (angles >= k * math.pi / 2) & (angles < (k + 1) * math.pi / 2)
-        quads.append(float(strong[m].mean()) if m.any() else 0.0)
-    return float(strong.sum() / usable.sum()), min(quads)
+    return float(strong.sum() / usable.sum())
 
 
 def refine_circle(mag: np.ndarray, cx: float, cy: float, r: float) -> tuple[float, float, float]:
@@ -156,13 +152,16 @@ def detect_coin(img: np.ndarray) -> tuple[Candidate | None, list[Candidate]]:
     gray = cv2.medianBlur(gray, 5)
 
     h, w = gray.shape
+    # HOUGH_GRADIENT_ALT: 10-100x lebih cepat pada foto asli bertekstur (akumulator 3D-nya
+    # jauh lebih kecil) dan langsung presisi. Dengan HOUGH_GRADIENT biasa, satu foto pemilik
+    # bisa butuh 16-139 detik dan tetap salah kunci; ALT 75-110 ms.
     circles = cv2.HoughCircles(
         gray,
-        cv2.HOUGH_GRADIENT,
-        dp=1.2,
-        minDist=min(h, w) * 0.25,
-        param1=110,
-        param2=34,
+        cv2.HOUGH_GRADIENT_ALT,
+        dp=1.5,
+        minDist=min(h, w) * 0.10,
+        param1=300,
+        param2=0.80,
         minRadius=int(min(h, w) * MIN_RADIUS_FRAC),
         maxRadius=int(min(h, w) * 0.5),
     )
@@ -174,9 +173,12 @@ def detect_coin(img: np.ndarray) -> tuple[Candidate | None, list[Candidate]]:
             cx, cy, r = refine_circle(mag, float(cx), float(cy), float(r))
             e = edge_support(mag, cx, cy, r)
             c = contrast(gray, cx, cy, r)
-            cov, min_quad = coverage_profile(mag, cx, cy, r)
-            if cov < MIN_COVERAGE or min_quad < MIN_QUADRANT:
-                continue  # bukan lingkaran tertutup: busur tangan, bayangan, tepi meja
+            if (cx - r < 0.01 * w or cx + r > 0.99 * w
+                    or cy - r < 0.01 * h or cy + r > 0.99 * h):
+                continue  # koin menyentuh tepi foto: kelilingnya tidak utuh, skala tak bisa dipercaya
+            cov = coverage(mag, cx, cy, r)
+            if cov < MIN_COVERAGE:
+                continue  # kelilingnya nyaris tanpa tepi: bukan benda bulat
             score = 0.45 * cov + 0.30 * e + 0.25 * c
             cands.append(Candidate(float(cx), float(cy), float(r), float(score), e))
 

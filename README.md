@@ -357,40 +357,38 @@ curl http://localhost:8000/v1/size-table
 | file > 12 MB | `413` | `Foto lebih dari 12 MB, perkecil dulu.` |
 | bytes gambar rusak | `422` | `File bukan gambar yang bisa dibaca (JPEG/PNG/WebP).` |
 
-## Uji dengan foto asli
+## Hasil pada foto pemilik
 
-Foto sintetis hanya membuktikan geometri. Uji perilaku memakai foto asli (`samples/real/`,
-lisensi CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Yang diuji: **boleh menerima
-atau harus menolak**, bukan akurasi milimeter.
-
-| foto | hasil sebelum | hasil sekarang |
-|---|---|---|
-| `tangan-koin-emas.jpg` (koin digenggam, tidak datar) | diterima sebagai koin, skor 0,90 — **salah**, itu busur telapak | ditolak, "patokan koin tidak terdeteksi" |
-| `tangan-koin-kecil.jpg` (koin ~4% lebar foto) | tidak terdeteksi | ditolak (ukuran koin tidak layak jadi patokan) |
-| `tangan-penggaris.jpg` (tangan di penggaris, tanpa koin) | tidak terdeteksi | ditolak |
-| `fixtures/coin_500.jpg` (foto koin asli, koin utuh di frame) | terdeteksi | terdeteksi, r=475 px pada sisi 1024, edge 0,47 |
-| `coin_200` / `coin_100` / `coin_1000` (koin menyentuh tepi frame) | terdeteksi | ditolak: keliling koin tidak utuh, skala tidak bisa dipercaya |
-
-Perbaikannya: kandidat lingkaran sekarang harus **tertutup dan konsisten** — coverage keliling
-≥ 0,60 dan tiap kuadran ≥ 0,45. Busur telapak hanya mengisi sebagian keliling (kuadran terlemah
-0,20), sedangkan koin utuh mengisi semuanya (0,91 pada scene sintetis). Sudut yang sampelnya
-keluar frame tidak dihitung, jadi koin yang terpotong ditolak karena alasan yang benar.
-
-Yang **belum** terukur dan tidak diklaim: selisih milimeter pada foto pelanggan dinail.co.
-Untuk itu perlu foto berlabel dari pemilik plus penggaris sebagai pembanding.
-
-## Evaluasi pada foto pemilik
-
-Paket data pemilik (32 foto tangan + `metadata_foto.csv` berisi pusat dan diameter koin per
-foto) **tidak ada di repo ini** karena berisi tangan pelanggan. Skrip evaluasinya ada, jalankan
-di mesin yang punya paket data:
+Paket data pemilik: 32 foto (16 grup, jempol dan empat jari) + `metadata_foto.csv` berisi pusat
+dan diameter koin tiap foto hasil ukur manual tim DS. Foto **tidak ada di repo** (tangan
+pelanggan), jadi evaluasi dijalankan lokal:
 
 ```bash
 python scripts/eval_real.py --data-dir ~/Downloads/dinail_data_siap_pakai --out eval
 ```
 
-Keluarannya `eval/report.json`: ringkasan (tingkat deteksi, median/p90 selisih diameter koin)
-dan satu baris per foto. Foto tidak disalin dan `eval/` tidak di-commit.
+Hasil terakhir (32 foto, koin Rp500/Rp1000, gerbang coverage ≥ 0,25):
+
+| metrik | nilai |
+|---|---|
+| koin terdeteksi | **31/32** (96,9%) |
+| selisih diameter koin, median | **2,3%** |
+| selisih diameter, p90 | 6,2% |
+| selisih terburuk | 22,7% (foto buram, `status_kualitas_awal = perlu_cek`) |
+| dalam 2% | 15 dari 31 |
+
+Selisih 2,3% pada koin 27 mm = 0,6 mm; pada lebar kuku 13 mm itu 0,3 mm, di bawah satu nomor
+ukuran. Deteksi koin memakai `HOUGH_GRADIENT_ALT` (75–110 ms per foto) — versi `HOUGH_GRADIENT`
+biasa butuh 16–139 detik untuk foto yang sama dan hasilnya lebih sering salah.
+
+**Batas yang diketahui:** pada satu dari tiga foto tangan uji (`samples/real/tangan-koin-emas.jpg`)
+busur telapak masih lolos sebagai "koin" (skor 0,72). Ambang gerbang sengaja diturunkan supaya
+koin pada foto pemilik benar-benar ketemu; kalau dinaikkan ke 0,60 hanya 17/32 foto pemilik yang
+lolos. Mitigasinya: hasil selalu saran dan admin tetap mengonfirmasi. Test
+`test_known_limitation_palm_can_look_like_a_coin` menjaga batas ini tetap tercatat.
+
+Yang **belum** terukur: ukuran kuku dalam mm terhadap penggaris. `metadata_foto.csv` hanya
+memuat geometri koin, dan `tabel_ukuran_tip_ISI_PEMILIK.csv` masih kosong.
 
 ## Kontrak API
 
@@ -409,8 +407,8 @@ width_mm, suggestion}`, `warnings[]`, `elapsed_ms`.
 
 - `quality.pass = false` → tampilkan `quality.reasons` apa adanya ke customer.
 - `suggestion.size = null` → tabel konversi pemilik belum diisi; jangan menebak.
-- Latensi terukur (foto contoh 1600×1200): 52–76 ms saat ditolak cepat, 199–299 ms saat
-  analisis penuh di laptop M-series. Di sandbox 4 vCPU, foto yang sama 550–710 ms.
+- Latensi terukur (foto 1600×1200): 47 ms saat ditolak cepat, 106 ms saat analisis penuh di
+  laptop M-series; foto tangan asli 134 ms. Di sandbox 4 vCPU, kalikan kira-kira dua.
 
 ## Data yang dipakai
 

@@ -1,0 +1,11 @@
+{
+  "_note": "Tabel konversi nomor ukuran press-on dari pemilik (dinail.co). Salin ke size_table.json setelah dikonfirmasi pemilik. Angka di bawah hanya contoh format.",
+  "source": "pemilik dinail.co",
+  "updated_at": "2026-11-08",
+  "sizes": [
+    {"size": "XS", "min_mm": 10.0, "max_mm": 12.5},
+    {"size": "S",  "min_mm": 12.6, "max_mm": 14.0},
+    {"size": "M",  "min_mm": 14.1, "max_mm": 15.5},
+    {"size": "L",  "min_mm": 15.6, "max_mm": 17.0}
+  ]
+}

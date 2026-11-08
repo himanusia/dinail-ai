@@ -58,7 +58,7 @@ python3.12 -m venv venv          # python >=3.10; 3.9 tidak punya wheel numpy>=2
 ```
 
 Buka `http://localhost:8000` untuk halaman unggah, atau `http://localhost:8000/docs` untuk
-Swagger. Demo daring: <https://dinail.himanusia.com> (mesin uji, bisa mati kapan saja).
+Swagger.
 
 ## Contoh foto & hasil
 

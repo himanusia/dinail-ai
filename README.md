@@ -45,7 +45,7 @@ foto tangan + koin
 | `scripts/make_samples.py` | pembuat foto contoh + gambar anotasi hasil untuk README |
 | `samples/` | foto contoh sintetis (`contoh-*.jpg`), gambar hasil (`hasil-*.jpg`), JSON hasil (`*.result.json`) |
 | `samples/real/` | tiga foto tangan asli (CC BY 2.0) untuk uji regresi, plus anotasi dan atribusi |
-| `tests/` | 42 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
+| `tests/` | 46 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
 | `samples/contoh-*.result.json` | keluaran JSON asli untuk tiap foto contoh |
 
 ## Jalankan
@@ -54,7 +54,7 @@ foto tangan + koin
 python3.12 -m venv venv          # python >=3.10; 3.9 tidak punya wheel numpy>=2.1
 ./venv/bin/pip install -r requirements.txt
 ./venv/bin/python scripts/make_fixtures.py   # fixture uji (sekali, ~10 s)
-./venv/bin/python -m pytest -q               # 42 uji, ~35 s
+./venv/bin/python -m pytest -q               # 46 uji, ~35 s
 ./venv/bin/uvicorn dinail_ai.app:app --port 8000
 ```
 
@@ -63,33 +63,40 @@ Swagger.
 
 ## Contoh foto & hasil
 
-Empat foto contoh ikut di repo (`samples/`), jadi perintah `curl` di bawah bisa langsung
-dijalankan setelah `uvicorn` nyala. Semuanya **scene sintetis** buatan
-`scripts/make_fixtures.py`: koin digambar pada radius pasti dengan tekstur foto koin domain
-publik, plus satu bentuk pengganti kuku berukuran pasti. Bukan foto pelanggan dinail.co —
-foto asli tidak dipublikasikan karena privasi.
+### Foto asli
 
-**Foto layak** (`samples/contoh-01-layak.jpg`) → **hasil** (`samples/hasil-layak.jpg`)
+Tiga foto tangan asli (CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Ini yang
+bentuknya paling dekat dengan foto customer, dan ketiganya **ditolak** karena tidak ada koin
+utuh yang layak dijadikan patokan:
+
+| masukan | hasil | alasan yang keluar |
+|---|---|---|
+| ![Tangan menggenggam koin](samples/real/tangan-koin-emas.jpg) | ![Hasil](samples/real/hasil-real-hand-coin.jpg) | patokan koin tidak terdeteksi |
+| ![Koin kecil di jari](samples/real/tangan-koin-kecil.jpg) | ![Hasil](samples/real/hasil-real-hand-coin2.jpg) | patokan koin tidak terdeteksi |
+| ![Tangan di penggaris](samples/real/tangan-penggaris.jpg) | ![Hasil](samples/real/hasil-real-hand-ruler.jpg) | patokan koin tidak terdeteksi |
+
+Kenapa ditolak, bukan diukur: koin dipegang (tidak datar), koinnya terlalu kecil di frame, atau
+memang tidak ada koin. Layanan ini belum mendeteksi kuku sama sekali — lebar kuku dikirim oleh
+UI/admin dalam piksel, jadi tidak ada "deteksi kuku" yang bisa dipamerkan dari foto ini.
+
+### Scene sintetis untuk uji geometri
+
+Empat foto di `samples/contoh-*.jpg` **bukan foto customer** dan bukan kuku: koinnya digambar
+pada radius pasti (tekstur dari foto koin domain publik) dan ada kotak pengganti kuku dengan
+lebar pasti, supaya skala dan konversi mm bisa dihitung tanpa ambiguitas. Fungsinya menguji
+geometri, bukan memperagakan kuku.
 
 | masukan | hasil |
 |---|---|
-| ![Foto contoh layak](samples/contoh-01-layak.jpg) | ![Hasil anotasi](samples/hasil-layak.jpg) |
+| ![Scene uji layak](samples/contoh-01-layak.jpg) | ![Hasil anotasi](samples/hasil-layak.jpg) |
+| ![Scene uji buram](samples/contoh-02-buram.jpg) | ![Hasil anotasi](samples/hasil-buram.jpg) |
+| ![Scene uji koin kecil](samples/contoh-03-koin-kecil.jpg) | ![Hasil anotasi](samples/hasil-koin-kecil.jpg) |
+| ![Scene uji tanpa jenis koin](samples/contoh-04-tanpa-jenis-koin.jpg) | ![Hasil anotasi](samples/hasil-tanpa-jenis-koin.jpg) |
 
-**Foto buram** (`samples/contoh-02-buram.jpg`) → ditolak
+Pada gambar hasil, angka mm diberi label "objek uji", bukan "kuku", karena memang bukan kuku.
+Koin yang terdeteksi tetap koin asli (foto domain publik) yang ditempel pada radius pasti.
 
-| masukan | hasil |
-|---|---|
-| ![Foto contoh buram](samples/contoh-02-buram.jpg) | ![Hasil anotasi](samples/hasil-buram.jpg) |
-
-**Koin terlalu kecil** (`samples/contoh-03-koin-kecil.jpg`) dan **jenis koin tidak dipilih**
-(`samples/contoh-04-tanpa-jenis-koin.jpg`):
-
-| masukan | hasil |
-|---|---|
-| ![Koin kecil](samples/contoh-03-koin-kecil.jpg) | ![Hasil koin kecil](samples/hasil-koin-kecil.jpg) |
-| ![Tanpa jenis koin](samples/contoh-04-tanpa-jenis-koin.jpg) | ![Hasil tanpa jenis koin](samples/hasil-tanpa-jenis-koin.jpg) |
-
-Gambar hasil dan JSON di bawah dibuat oleh `scripts/make_samples.py` dengan memanggil pipeline
+Gambar hasil dan JSON di bawah dibuat oleh `scripts/make_samples.py` yang memanggil pipeline
 yang sama seperti layanan, bukan ditulis tangan.
 
 ## Contoh input & output
@@ -120,13 +127,14 @@ curl -X POST http://localhost:8000/v1/analyze \
   },
   "coin": {
     "found": true,
-    "center_px": [1120.3, 541.2],
+    "center_px": [
+      1120.3,
+      541.2
+    ],
     "radius_px": 121.2,
     "diameter_px": 242.4,
-    "score": 0.843,
-    "alternatives": [
-      {"center_px": [1315.0, 320.7], "radius_px": 325.2, "score": 0.074}
-    ],
+    "score": 0.928,
+    "alternatives": [],
     "type": "500",
     "diameter_mm": 27.0
   },
@@ -141,7 +149,7 @@ curl -X POST http://localhost:8000/v1/analyze \
     }
   },
   "warnings": [],
-  "elapsed_ms": 550.9
+  "elapsed_ms": 199.2
 }
 ```
 
@@ -178,7 +186,7 @@ curl -X POST http://localhost:8000/v1/analyze \
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 62.6
+  "elapsed_ms": 51.7
 }
 ```
 
@@ -208,10 +216,13 @@ curl -X POST http://localhost:8000/v1/analyze \
   },
   "coin": {
     "found": true,
-    "center_px": [1119.7, 539.9],
+    "center_px": [
+      1119.7,
+      539.9
+    ],
     "radius_px": 52.4,
     "diameter_px": 104.8,
-    "score": 0.977,
+    "score": 0.99,
     "alternatives": [],
     "type": "100",
     "diameter_mm": 23.0
@@ -219,7 +230,7 @@ curl -X POST http://localhost:8000/v1/analyze \
   "scale_px_per_mm": 4.5567,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 216.9
+  "elapsed_ms": 75.6
 }
 ```
 
@@ -253,21 +264,19 @@ curl -X POST http://localhost:8000/v1/analyze \
   },
   "coin": {
     "found": true,
-    "center_px": [1120.3, 541.7],
+    "center_px": [
+      1120.3,
+      541.7
+    ],
     "radius_px": 149.4,
     "diameter_px": 298.9,
-    "score": 0.772,
-    "alternatives": [
-      {"center_px": [896.0, 328.7], "radius_px": 348.8, "score": 0.073},
-      {"center_px": [1352.1, 821.8], "radius_px": 418.6, "score": 0.072},
-      {"center_px": [1368.3, 355.7], "radius_px": 377.6, "score": 0.062}
-    ],
-    "type": null
+    "score": 0.878,
+    "alternatives": []
   },
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 544.0
+  "elapsed_ms": 298.7
 }
 ```
 
@@ -379,8 +388,8 @@ width_mm, suggestion}`, `warnings[]`, `elapsed_ms`.
 
 - `quality.pass = false` → tampilkan `quality.reasons` apa adanya ke customer.
 - `suggestion.size = null` → tabel konversi pemilik belum diisi; jangan menebak.
-- Latensi terukur: 62 ms (ditolak cepat), 217–710 ms (analisis penuh) untuk foto
-  1600×1200 s.d. 3200×2400 di 4 vCPU.
+- Latensi terukur (foto contoh 1600×1200): 52–76 ms saat ditolak cepat, 199–299 ms saat
+  analisis penuh di laptop M-series. Di sandbox 4 vCPU, foto yang sama 550–710 ms.
 
 ## Data yang dipakai
 

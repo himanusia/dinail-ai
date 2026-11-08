@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>dinail AI — cek foto ukuran</title>
+<style>
+  :root { color-scheme: light dark; --line: #d8d3cc; --ink: #221f1c; --mut: #6b645c; --ok: #2f7d4f; --bad: #b3341f; }
+  body { margin: 0; padding: 32px 20px; font: 15px/1.55 -apple-system, "Inter", system-ui, sans-serif; background: #faf7f3; color: var(--ink); }
+  main { max-width: 740px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  p.sub { margin: 0 0 24px; color: var(--mut); }
+  form { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 18px; display: grid; gap: 14px; }
+  label { font-weight: 600; font-size: 13px; display: grid; gap: 6px; }
+  input[type=file], select, input[type=number] { font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  button { font: inherit; font-weight: 600; padding: 11px 18px; border: 0; border-radius: 8px; background: #221f1c; color: #fff; cursor: pointer; justify-self: start; }
+  button:disabled { opacity: .5; cursor: progress; }
+  pre { background: #14120f; color: #e8e2d9; padding: 16px; border-radius: 10px; overflow: auto; font-size: 12.5px; line-height: 1.5; }
+  .verdict { font-weight: 700; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  img#preview { max-width: 100%; border-radius: 10px; display: none; }
+  ul { margin: 8px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>dinail AI — cek foto ukuran kuku</h1>
+  <p class="sub">Gerbang kualitas foto + skala patokan koin. Hasil selalu saran; admin tetap mengecek.</p>
+
+  <form id="f">
+    <label>Foto tangan + koin
+      <input type="file" name="image" accept="image/jpeg,image/png,image/webp" required />
+    </label>
+    <label>Jenis koin yang dipakai
+      <select name="coin">
+        <option value="">— belum dipilih —</option>
+        <option value="100">Rp100 (23 mm)</option>
+        <option value="200">Rp200 (25 mm)</option>
+        <option value="500">Rp500 (27 mm)</option>
+        <option value="1000">Rp1000 (24 mm)</option>
+        <option value="50">Rp50 (20 mm)</option>
+      </select>
+    </label>
+    <label>Lebar kuku (piksel, opsional)
+      <input type="number" name="nail_width_px" step="0.5" min="1" placeholder="mis. 78" />
+    </label>
+    <button type="submit">Analisis</button>
+  </form>
+
+  <img id="preview" alt="preview" />
+  <div id="out"></div>
+</main>
+
+<script>
+const f = document.getElementById('f');
+const out = document.getElementById('out');
+const preview = document.getElementById('preview');
+
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = f.querySelector('button');
+  btn.disabled = true;
+  out.innerHTML = '<p class="sub">Memproses…</p>';
+  try {
+    const res = await fetch('/v1/analyze', { method: 'POST', body: new FormData(f) });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || res.statusText);
+    const q = body.quality;
+    const lines = [];
+    lines.push(`<p class="verdict ${q.pass ? 'ok' : 'bad'}">${q.pass ? 'Foto lolos' : 'Foto ditolak'}</p>`);
+    if (q.reasons && q.reasons.length) lines.push('<ul>' + q.reasons.map((r) => `<li>${r}</li>`).join('') + '</ul>');
+    if (body.coin) lines.push(`<p>Koin: <b>${body.coin.type || 'terdeteksi, jenis belum dipilih'}</b> · diameter ${body.coin.diameter_px} px` +
+      (body.coin.diameter_mm ? ` · ${body.coin.diameter_mm} mm` : '') + `</p>`);
+    if (body.scale_px_per_mm) lines.push(`<p>Skala: <b>${body.scale_px_per_mm.toFixed(2)} px/mm</b></p>`);
+    if (body.nail) lines.push(`<p>Lebar kuku: <b>${body.nail.width_mm} mm</b> · saran ukuran: <b>${body.nail.suggestion.size || '—'}</b></p>`);
+    out.innerHTML = lines.join('');
+    out.insertAdjacentHTML('beforeend', `<pre>${JSON.stringify(body, null, 2)}</pre>`);
+  } catch (err) {
+    out.innerHTML = `<p class="bad">${err.message}</p>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+f.image?.addEventListener('change', () => {
+  const file = f.image.files[0];
+  if (!file) return;
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+});
+</script>
+</body>
+</html>

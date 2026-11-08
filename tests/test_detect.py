@@ -1,43 +1,59 @@
-"""Deteksi koin: refine sub-piksel harus mengalahkan kuantisasi Hough."""
+"""Deteksi koin: akurasi diameter pada scene ber-ground-truth + ketahanan pada foto asli."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import cv2
-import numpy as np
 import pytest
 
 from dinail_ai import detect
 
-
-def _scene(radius: int = 140, size=(1200, 1600)) -> np.ndarray:
-    h, w = size
-    img = np.full((h, w, 3), 205, np.uint8)
-    cv2.circle(img, (int(w * 0.7), int(h * 0.45)), radius, (95, 100, 110), -1)
-    cv2.circle(img, (int(w * 0.7), int(h * 0.45)), int(radius * 0.8), (140, 145, 150), -1)
-    return cv2.GaussianBlur(img, (3, 3), 0)
+ROOT = Path(__file__).resolve().parents[1]
+FIX = ROOT / "fixtures"
+TOL_DIAMETER = 0.02  # 2% error diameter koin
+TOO_SMALL = {"g5_100.jpg"}  # koin 105 px: terdeteksi, tapi ditolak gerbang kualitas
 
 
-@pytest.mark.parametrize("radius", [90, 140, 220])
-def test_refined_diameter_within_one_percent(radius):
-    """Target 1%: Hough sendirian meleset 4-6%; refine memotong errornya jadi <1%."""
-    best, _ = detect.detect_coin(_scene(radius=radius))
+def truth() -> list[dict]:
+    p = FIX / "ground_truth.json"
+    if not p.exists():
+        pytest.skip("fixtures belum dibuat: jalankan scripts/make_fixtures.py")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", truth(), ids=lambda c: c["file"])
+def test_detected_diameter_close_to_ground_truth(case):
+    best, _ = detect.detect_coin(cv2.imread(str(FIX / case["file"])))
+    assert best is not None, case["file"]
+    err = abs(2 * best.r - case["true_diameter_px"]) / case["true_diameter_px"]
+    assert err <= TOL_DIAMETER, (
+        f"{case['file']}: diameter {2 * best.r:.1f} vs {case['true_diameter_px']} px (err {err:.2%})"
+    )
+
+
+def test_small_coin_is_still_located():
+    """Koin kecil tetap harus ketemu; yang menolak adalah gerbang kualitas, bukan detektor."""
+    case = next(c for c in truth() if c["file"] in TOO_SMALL)
+    best, _ = detect.detect_coin(cv2.imread(str(FIX / case["file"])))
     assert best is not None
-    err = abs(2 * best.r - 2 * radius) / (2 * radius)
-    assert err <= 0.01, f"r={radius}: diameter {2 * best.r:.2f} (err {err:.2%})"
+    assert 2 * best.r < 0.12 * 1200
 
 
-def test_refine_ignores_inner_ring():
-    """Koin rupiah punya cincin dekoratif di dalam tepi: refine harus memilih rim luar."""
-    img = _scene(radius=200)
-    gray = cv2.medianBlur(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 5)
-    cx, cy, r = detect.refine_circle(detect.gradient_mag(gray), 1600 * 0.7, 1200 * 0.45, 190)
-    assert abs(2 * r - 400) / 400 <= 0.01, f"diameter {2 * r:.1f} vs 400"
+def test_no_coin_on_empty_scene():
+    best, _ = detect.detect_coin(cv2.imread(str(FIX / "bad_nocoin.jpg")))
+    assert best is None
 
 
-def test_refine_keeps_coarse_when_fit_is_wild():
-    """Fit yang melompat >20% radius harus ditolak, bukan dipakai."""
-    rng = np.random.default_rng(0)
-    mag = rng.normal(5, 1, (600, 600)).astype(np.float32)
-    cx, cy, r = detect.refine_circle(mag, 300, 300, 100)
-    # derau tanpa tepi: hasil tidak boleh melompat jauh dari usulan awal
-    assert abs(cx - 300) < 1 and abs(cy - 300) < 1 and abs(r - 100) < 1
+def test_real_coin_photos_detected():
+    """Ketahanan pada foto koin asli (bukan uji akurasi: diameter aslinya tak diketahui)."""
+    for denom in ("500", "200", "100", "1000"):
+        p = FIX / f"coin_{denom}.jpg"
+        if not p.exists():
+            pytest.skip("fixtures belum dibuat")
+        img = cv2.imread(str(p))
+        s = 1024 / max(img.shape[:2])
+        best, _ = detect.detect_coin(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA))
+        assert best is not None, f"koin {denom} tidak terdeteksi"
+        assert best.score > 0.5

@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+size_table.json
+fixtures/*.jpg
+fixtures/*.png
+dinail_ai/size_table.json

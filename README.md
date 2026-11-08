@@ -63,11 +63,23 @@ Swagger.
 
 ## Contoh foto & hasil
 
-### Foto asli
+### Koin Rupiah (foto asli, domain publik)
 
-Tiga foto tangan asli (CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Ini yang
-bentuknya paling dekat dengan foto customer, dan ketiganya **ditolak** karena tidak ada koin
-utuh yang layak dijadikan patokan:
+Foto koin yang dipakai sebagai patokan skala, `samples/koin/` (atribusi di
+`samples/koin/ATTRIBUTION.md`):
+
+| Rp500 | Rp1000 | Rp200 | Rp100 |
+|---|---|---|---|
+| ![Rp500](samples/koin/koin-500.jpg) | ![Rp1000](samples/koin/koin-1000.jpg) | ![Rp200](samples/koin/koin-200.jpg) | ![Rp100](samples/koin/koin-100.jpg) |
+
+Hanya foto Rp500 yang punya margin di sekeliling koin, jadi hanya itu yang diterima detektor
+(r=475 px pada sisi 1024). Tiga lainnya dipotong tepat di tepi koin, sehingga kelilingnya tidak
+utuh di dalam frame dan sengaja ditolak.
+
+### Foto tangan (uji negatif)
+
+Tiga foto tangan asli (CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Ketiganya
+**ditolak** karena tidak ada koin Rupiah utuh yang layak jadi patokan:
 
 | masukan | hasil | alasan yang keluar |
 |---|---|---|
@@ -75,9 +87,14 @@ utuh yang layak dijadikan patokan:
 | ![Koin kecil di jari](samples/real/tangan-koin-kecil.jpg) | ![Hasil](samples/real/hasil-real-hand-coin2.jpg) | patokan koin tidak terdeteksi |
 | ![Tangan di penggaris](samples/real/tangan-penggaris.jpg) | ![Hasil](samples/real/hasil-real-hand-ruler.jpg) | patokan koin tidak terdeteksi |
 
-Kenapa ditolak, bukan diukur: koin dipegang (tidak datar), koinnya terlalu kecil di frame, atau
-memang tidak ada koin. Layanan ini belum mendeteksi kuku sama sekali — lebar kuku dikirim oleh
-UI/admin dalam piksel, jadi tidak ada "deteksi kuku" yang bisa dipamerkan dari foto ini.
+Yang belum ada di repo: **foto jari + koin Rupiah**. Format yang dituju adalah dua foto seperti
+panduan ukur press-on pada umumnya — (1) jempol dengan koin rebah di meja, (2) empat jari
+berdampingan dengan koin yang sama. Foto pelanggan tidak dipublikasikan karena privasi, foto
+tangan di atas memakai koin non-Rupiah, dan gambar dari media sosial bukan milik tim untuk
+dipublikasikan. Sampai foto itu ada, layanan **belum punya bukti akurasi pada foto jenis ini**.
+
+Layanan juga belum mendeteksi kuku sama sekali: lebar kuku dikirim UI/admin dalam piksel, jadi
+tidak ada "deteksi kuku" yang bisa dipamerkan.
 
 ### Scene sintetis untuk uji geometri
 

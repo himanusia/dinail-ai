@@ -37,13 +37,14 @@ foto tangan + koin
 |---|---|
 | `dinail_ai/coins.py` | tabel diameter koin rupiah + nominal yang ambigu (sumber + tahun) |
 | `dinail_ai/quality.py` | metrik kualitas foto + `gate()` yang mengembalikan alasan tolak |
-| `dinail_ai/detect.py` | Hough kasar → refine sub-piksel ke rim luar → skor kandidat |
+| `dinail_ai/detect.py` | Hough kasar → refine sub-piksel ke rim luar → gerbang coverage per kuadran → skor |
 | `dinail_ai/sizes.py` | pemetaan lebar mm ke nomor ukuran dari tabel pemilik (atau "belum diisi") |
 | `dinail_ai/analyze.py` | orkestrasi satu foto: kualitas → deteksi → skala → saran |
 | `dinail_ai/app.py` | FastAPI: `/v1/analyze`, `/health`, `/v1/size-table`, halaman `/` |
 | `scripts/make_fixtures.py` | pembuat scene uji ber-ground-truth + crop foto koin |
 | `scripts/make_samples.py` | pembuat foto contoh + gambar anotasi hasil untuk README |
-| `samples/` | foto contoh (`contoh-*.jpg`), gambar hasil (`hasil-*.jpg`), JSON hasil (`*.result.json`) |
+| `samples/` | foto contoh sintetis (`contoh-*.jpg`), gambar hasil (`hasil-*.jpg`), JSON hasil (`*.result.json`) |
+| `samples/real/` | tiga foto tangan asli (CC BY 2.0) untuk uji regresi, plus anotasi dan atribusi |
 | `tests/` | 42 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
 | `samples/contoh-*.result.json` | keluaran JSON asli untuk tiap foto contoh |
 
@@ -339,6 +340,28 @@ curl http://localhost:8000/v1/size-table
 | file > 12 MB | `413` | `Foto lebih dari 12 MB, perkecil dulu.` |
 | bytes gambar rusak | `422` | `File bukan gambar yang bisa dibaca (JPEG/PNG/WebP).` |
 
+## Uji dengan foto asli
+
+Foto sintetis hanya membuktikan geometri. Uji perilaku memakai foto asli (`samples/real/`,
+lisensi CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Yang diuji: **boleh menerima
+atau harus menolak**, bukan akurasi milimeter.
+
+| foto | hasil sebelum | hasil sekarang |
+|---|---|---|
+| `tangan-koin-emas.jpg` (koin digenggam, tidak datar) | diterima sebagai koin, skor 0,90 — **salah**, itu busur telapak | ditolak, "patokan koin tidak terdeteksi" |
+| `tangan-koin-kecil.jpg` (koin ~4% lebar foto) | tidak terdeteksi | ditolak (ukuran koin tidak layak jadi patokan) |
+| `tangan-penggaris.jpg` (tangan di penggaris, tanpa koin) | tidak terdeteksi | ditolak |
+| `fixtures/coin_500.jpg` (foto koin asli, koin utuh di frame) | terdeteksi | terdeteksi, r=475 px pada sisi 1024, edge 0,47 |
+| `coin_200` / `coin_100` / `coin_1000` (koin menyentuh tepi frame) | terdeteksi | ditolak: keliling koin tidak utuh, skala tidak bisa dipercaya |
+
+Perbaikannya: kandidat lingkaran sekarang harus **tertutup dan konsisten** — coverage keliling
+≥ 0,60 dan tiap kuadran ≥ 0,45. Busur telapak hanya mengisi sebagian keliling (kuadran terlemah
+0,20), sedangkan koin utuh mengisi semuanya (0,91 pada scene sintetis). Sudut yang sampelnya
+keluar frame tidak dihitung, jadi koin yang terpotong ditolak karena alasan yang benar.
+
+Yang **belum** terukur dan tidak diklaim: selisih milimeter pada foto pelanggan dinail.co.
+Untuk itu perlu foto berlabel dari pemilik plus penggaris sebagai pembanding.
+
 ## Kontrak API
 
 `POST /v1/analyze` — `multipart/form-data`
@@ -381,8 +404,9 @@ Ambang gerbang kualitas (`dinail_ai/quality.py`):
 | koin ada | terdeteksi | radius mulai 3,5% sisi pendek |
 | koin cukup besar | diameter ≥ 12% sisi pendek | putuskan skala masih layak atau tidak |
 
-Akurasi pada 6 scene sintetis ber-ground-truth (`fixtures/ground_truth.json`). Ground truth
-dibangun dengan menggambar koin pada radius pasti, bukan diukur dengan detektor yang sama:
+Akurasi **geometri** pada 6 scene sintetis ber-ground-truth (`fixtures/ground_truth.json`).
+Ground truth dibangun dengan menggambar koin pada radius pasti, bukan diukur dengan detektor
+yang sama. Ini bukan akurasi pada foto asli — lihat bagian "Uji dengan foto asli":
 
 | file | koin | skala asli | terdeteksi | error | lebar asli | terdeteksi | error | vonis |
 |---|---|---|---|---|---|---|---|---|

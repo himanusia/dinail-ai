@@ -24,6 +24,13 @@ from dinail_ai.analyze import analyze  # noqa: E402
 
 FIX = ROOT / "fixtures"
 OUT = ROOT / "samples"
+REAL = OUT / "real"
+
+REAL_CASES = [
+    ("real-hand-coin", "tangan-koin-emas.jpg", "Koin dipegang tangan, tidak datar"),
+    ("real-hand-coin2", "tangan-koin-kecil.jpg", "Koin kecil di jari, bukan patokan"),
+    ("real-hand-ruler", "tangan-penggaris.jpg", "Tangan di penggaris, tanpa koin"),
+]
 
 CASES = [
     ("contoh-01-layak", "g2_500.jpg", "500", 118.8, "Foto layak, koin Rp500"),
@@ -98,6 +105,17 @@ def main() -> int:
         (OUT / f"{name}.result.json").write_text(
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"{name}: ok={res.ok} scale={res.scale_px_per_mm} reasons={res.quality['reasons']}")
+
+    for name, src, title in REAL_CASES:
+        src_path = REAL / src
+        if not src_path.exists():
+            print(f"lewat: {src_path} tidak ada", file=sys.stderr)
+            continue
+        res = analyze(src_path.read_bytes(), coin="500")
+        annotated = annotate(cv2.imread(str(src_path)), res, title)
+        out_path = REAL / f"hasil-{name}.jpg"
+        cv2.imwrite(str(out_path), annotated, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        print(f"{name}: ok={res.ok} reasons={res.quality['reasons'][:1]} -> {out_path.name}")
 
     return 0
 

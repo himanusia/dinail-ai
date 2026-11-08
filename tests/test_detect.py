@@ -46,14 +46,40 @@ def test_no_coin_on_empty_scene():
     assert best is None
 
 
-def test_real_coin_photos_detected():
-    """Ketahanan pada foto koin asli (bukan uji akurasi: diameter aslinya tak diketahui)."""
-    for denom in ("500", "200", "100", "1000"):
+def test_real_coin_photo_with_margin_is_detected():
+    """Foto koin asli (domain publik) dengan koin utuh di dalam frame harus terdeteksi."""
+    p = FIX / "coin_500.jpg"
+    if not p.exists():
+        pytest.skip("fixtures belum dibuat")
+    img = cv2.imread(str(p))
+    s = 1024 / max(img.shape[:2])
+    best, _ = detect.detect_coin(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA))
+    assert best is not None, "koin utuh tidak terdeteksi"
+    assert 0.42 * 1024 <= best.r <= 0.50 * 1024, f"radius {best.r:.0f} di luar rentang wajar koin penuh"
+    assert best.edge > 0.4
+
+
+def test_clipped_coin_photos_are_rejected():
+    """Foto yang koinnya menyentuh tepi frame tidak boleh dipakai jadi patokan: kelilingnya
+    tidak utuh, jadi skalanya tidak bisa dipercaya."""
+    for denom in ("200", "100", "1000"):
         p = FIX / f"coin_{denom}.jpg"
         if not p.exists():
             pytest.skip("fixtures belum dibuat")
         img = cv2.imread(str(p))
         s = 1024 / max(img.shape[:2])
         best, _ = detect.detect_coin(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA))
-        assert best is not None, f"koin {denom} tidak terdeteksi"
-        assert best.score > 0.5
+        assert best is None, f"koin {denom} terpotong frame tapi diterima (r={best.r:.0f})"
+
+
+REAL = ROOT / "samples" / "real"
+
+
+@pytest.mark.parametrize("name", ["tangan-koin-emas.jpg", "tangan-koin-kecil.jpg", "tangan-penggaris.jpg"])
+def test_real_hand_photos_produce_no_coin(name):
+    """Regresi bug nyata: dulu busur telapak diterima sebagai koin (skor 0.90) di foto ini."""
+    p = REAL / name
+    if not p.exists():
+        pytest.skip("foto asli tidak ada")
+    best, _ = detect.detect_coin(cv2.imread(str(p)))
+    assert best is None, f"{name}: busur tangan diterima sebagai koin (r={best.r:.0f}, skor={best.score:.2f})"

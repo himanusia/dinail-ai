@@ -76,8 +76,8 @@ Skala yang keluar dibandingkan dengan ukur manual tim DS pada foto yang sama:
 
 | foto | skala manual | skala layanan | selisih |
 |---|---|---|---|
-| `jempol-koin-500` | 10,57 px/mm | 10,77 px/mm | +1,8% |
-| `empat-jari-koin-500` | 8,42 px/mm | 8,52 px/mm | +1,2% |
+| `jempol-koin-500` | 10,57 px/mm | 10,73 px/mm | +1,5% |
+| `empat-jari-koin-500` | 8,42 px/mm | 8,49 px/mm | +0,8% |
 
 Layanan **belum** mengukur lebar kuku: yang digambar hanya lingkaran koin dan skala. Lebar
 kuku masih dikirim UI/admin dalam piksel (lihat "Yang belum dikerjakan").

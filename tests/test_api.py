@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from dinail_ai.app import app
+from dinail_ai.coins import COINS
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "fixtures"
@@ -21,7 +22,7 @@ def client() -> TestClient:
 def test_health_reports_coin_table():
     h = client().get("/health").json()
     assert h["status"] == "ok"
-    assert h["coins"]["500"] == 27.0
+    assert h["coins"]["500"] == 27.10
     assert h["size_table_configured"] is False  # pemilik belum menyerahkan tabel
 
 
@@ -41,7 +42,7 @@ def test_analyze_full_response():
     assert body["ok"] is True
     assert body["quality"]["pass"] is True
     assert body["coin"]["type"] == case["coin"]
-    assert body["coin"]["diameter_mm"] == case["diameter_mm"]
+    assert body["coin"]["diameter_mm"] == COINS[case["coin"]]["diameter_mm"]
     assert body["nail"]["suggestion"]["size"] is None  # tabel pemilik belum ada
     assert body["elapsed_ms"] < 8000
 

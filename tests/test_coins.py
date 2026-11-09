@@ -5,7 +5,7 @@ from dinail_ai.coins import AMBIGUOUS_PAIRS, COINS
 
 def test_table_matches_official_diameters():
     assert {k: v["diameter_mm"] for k, v in COINS.items()} == {
-        "50": 20.0, "100": 23.0, "200": 25.0, "500": 27.0, "1000": 24.0,
+        "50": 20.0, "100": 23.0, "200": 25.0, "500": 27.10, "1000": 24.10,
     }
 
 

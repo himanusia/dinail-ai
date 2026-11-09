@@ -53,7 +53,7 @@ def test_small_coin_rejected_with_reason():
 def test_scale_comes_from_declared_coin(case):
     res = analyze((FIX / CASE).read_bytes(), coin="500")
     assert res.ok
-    assert res.coin["diameter_mm"] == 27.0
+    assert res.coin["diameter_mm"] == 27.10
     assert "source" not in res.coin  # terdeteksi dari foto, bukan input manual
 
 

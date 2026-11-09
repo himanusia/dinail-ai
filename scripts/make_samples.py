@@ -1,14 +1,18 @@
 """Buat foto contoh + gambar hasil anotasi untuk README (ikut di-commit, bukan fixture uji).
 
-Masukan: fixtures/*.jpg (dibuat oleh scripts/make_fixtures.py, tidak di-commit).
-Keluaran: samples/contoh-*.jpg (foto masukan) dan samples/hasil-*.jpg (anotasi).
+Tiga kelompok:
+1. samples/asli/    foto asli pemilik (jempol + empat jari dengan koin Rp500), EXIF dihapus,
+                    dipakai dengan izin pemilik. Butuh --data-dir ke paket data pemilik.
+2. samples/real/    foto tangan CC BY 2.0 sebagai uji negatif.
+3. samples/contoh-* scene sintetis ber-ground-truth untuk uji geometri.
 
-Semua foto contoh adalah scene sintetis buatan scripts/make_fixtures.py: koin digambar dengan
-radius pasti, teksturnya dari foto koin domain publik Wikimedia Commons. Bukan foto pelanggan.
+Pakai:
+    python scripts/make_samples.py --data-dir ~/Downloads/dinail_data_siap_pakai
 """
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import sys
 from pathlib import Path
@@ -29,6 +33,12 @@ REAL_CASES = [
     ("real-hand-coin", "tangan-koin-emas.jpg", "Koin dipegang tangan, tidak datar"),
     ("real-hand-coin2", "tangan-koin-kecil.jpg", "Koin kecil di jari, bukan patokan"),
     ("real-hand-ruler", "tangan-penggaris.jpg", "Tangan di penggaris, tanpa koin"),
+]
+
+# Foto pemilik yang dipakai di README: grup S01 (berlabel ukuran), koin Rp500 27,10 mm.
+ASLI_CASES = [
+    ("jempol-koin-500", "FOTO_027.jpg", "500", "Jempol + koin Rp500"),
+    ("empat-jari-koin-500", "FOTO_028.jpg", "500", "Empat jari + koin Rp500"),
 ]
 
 CASES = [
@@ -80,7 +90,42 @@ def annotate(img: np.ndarray, res, title: str, object_label: str = "objek uji") 
     return out
 
 
+def read_clean(path: Path) -> np.ndarray:
+    """Baca lalu tulis ulang tanpa EXIF: foto pemilik tidak membawa metadata kamera/GPS."""
+    img = cv2.imread(str(path))
+    if img is None:
+        raise SystemExit(f"tidak bisa membaca {path}")
+    return img
+
+
+def emit_asli(data_dir: Path) -> None:
+    src_dir = data_dir / "02_foto_ukuran" / "foto"
+    out = OUT / "asli"
+    out.mkdir(exist_ok=True)
+    for name, src, coin, title in ASLI_CASES:
+        img = read_clean(src_dir / src)
+        h, w = img.shape[:2]
+        if max(h, w) > 1280:
+            f = 1280 / max(h, w)
+            img = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
+        # imwrite menulis JPEG baru: EXIF (GPS, model kamera, waktu) tidak ikut
+        cv2.imwrite(str(out / f"{name}.jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+
+        res = analyze((out / f"{name}.jpg").read_bytes(), coin=coin)
+        annotated = annotate(img, res, title, "lebar kuku (input UI)")
+        cv2.imwrite(str(out / f"hasil-{name}.jpg"), annotated, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        print(f"{name}: ok={res.ok} koin={bool(res.coin)} skala={res.scale_px_per_mm} "
+              f"| {res.quality['reasons'][:1]}")
+
+
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", help="paket data pemilik (berisi 02_foto_ukuran/foto)")
+    args = ap.parse_args()
+
+    if args.data_dir:
+        emit_asli(Path(args.data_dir).expanduser())
+
     if not (FIX / "ground_truth.json").exists():
         print("fixtures belum ada: jalankan scripts/make_fixtures.py dulu", file=sys.stderr)
         return 1

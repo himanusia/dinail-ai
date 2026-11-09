@@ -44,7 +44,8 @@ foto tangan + koin
 | `scripts/make_fixtures.py` | pembuat scene uji ber-ground-truth + crop foto koin |
 | `scripts/make_samples.py` | pembuat foto contoh + gambar anotasi hasil untuk README |
 | `samples/` | foto contoh sintetis (`contoh-*.jpg`) dan gambar hasil anotasinya (`hasil-*.jpg`) |
-| `samples/real/` | tiga foto tangan asli (CC BY 2.0) untuk uji regresi, plus anotasi dan atribusi |
+| `samples/asli/` | foto asli pemilik (jempol + empat jari) dan hasil anotasinya |
+| `samples/real/` | tiga foto tangan asli (CC BY 2.0) untuk uji negatif, plus atribusi |
 | `tests/` | 46 uji: tabel koin, gerbang kualitas, deteksi & akurasi, tabel ukuran, orkestrasi, API |
 
 ## Jalankan
@@ -62,38 +63,29 @@ Swagger.
 
 ## Contoh foto & hasil
 
-### Koin Rupiah (foto asli, domain publik)
+Foto asli dari pemilik dinail.co (sampel berlabel S01): jempol dan empat jari dengan koin
+Rp500 yang sama. EXIF dihapus dan tidak ada wajah atau nama di dalamnya; dipakai dengan izin
+pemilik untuk capstone ini.
 
-Foto koin yang dipakai sebagai patokan skala, `samples/koin/` (atribusi di
-`samples/koin/ATTRIBUTION.md`):
+| masukan | hasil |
+|---|---|
+| ![Jempol dengan koin](samples/asli/jempol-koin-500.jpg) | ![Hasil jempol](samples/asli/hasil-jempol-koin-500.jpg) |
+| ![Empat jari dengan koin](samples/asli/empat-jari-koin-500.jpg) | ![Hasil empat jari](samples/asli/hasil-empat-jari-koin-500.jpg) |
 
-| Rp500 | Rp1000 | Rp200 | Rp100 |
+Skala yang keluar dibandingkan dengan ukur manual tim DS pada foto yang sama:
+
+| foto | skala manual | skala layanan | selisih |
 |---|---|---|---|
-| ![Rp500](samples/koin/koin-500.jpg) | ![Rp1000](samples/koin/koin-1000.jpg) | ![Rp200](samples/koin/koin-200.jpg) | ![Rp100](samples/koin/koin-100.jpg) |
+| `jempol-koin-500` | 10,57 px/mm | 10,77 px/mm | +1,8% |
+| `empat-jari-koin-500` | 8,42 px/mm | 8,52 px/mm | +1,2% |
 
-Hanya foto Rp500 yang punya margin di sekeliling koin, jadi hanya itu yang diterima detektor
-(r=475 px pada sisi 1024). Tiga lainnya dipotong tepat di tepi koin, sehingga kelilingnya tidak
-utuh di dalam frame dan sengaja ditolak.
+Layanan **belum** mengukur lebar kuku: yang digambar hanya lingkaran koin dan skala. Lebar
+kuku masih dikirim UI/admin dalam piksel (lihat "Yang belum dikerjakan").
 
-### Foto tangan (uji negatif)
-
-Tiga foto tangan asli (CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`). Ketiganya
-**ditolak** karena tidak ada koin Rupiah utuh yang layak jadi patokan:
-
-| masukan | hasil | alasan yang keluar |
-|---|---|---|
-| ![Tangan menggenggam koin](samples/real/tangan-koin-emas.jpg) | ![Hasil](samples/real/hasil-real-hand-coin.jpg) | patokan koin tidak terdeteksi |
-| ![Koin kecil di jari](samples/real/tangan-koin-kecil.jpg) | ![Hasil](samples/real/hasil-real-hand-coin2.jpg) | patokan koin tidak terdeteksi |
-| ![Tangan di penggaris](samples/real/tangan-penggaris.jpg) | ![Hasil](samples/real/hasil-real-hand-ruler.jpg) | patokan koin tidak terdeteksi |
-
-Yang belum ada di repo: **foto jari + koin Rupiah**. Format yang dituju adalah dua foto seperti
-panduan ukur press-on pada umumnya — (1) jempol dengan koin rebah di meja, (2) empat jari
-berdampingan dengan koin yang sama. Foto pelanggan tidak dipublikasikan karena privasi, foto
-tangan di atas memakai koin non-Rupiah, dan gambar dari media sosial bukan milik tim untuk
-dipublikasikan. Sampai foto itu ada, layanan **belum punya bukti akurasi pada foto jenis ini**.
-
-Layanan juga belum mendeteksi kuku sama sekali: lebar kuku dikirim UI/admin dalam piksel, jadi
-tidak ada "deteksi kuku" yang bisa dipamerkan.
+Uji negatif (tidak ditampilkan sebagai contoh): tiga foto tangan CC BY 2.0 di `samples/real/`
+dipakai memastikan layanan menolak foto tanpa koin Rupiah yang layak. Dua ditolak; satu
+(telapak dengan koin digenggam) masih lolos — batas yang diketahui, dijelaskan di bagian
+"Hasil pada foto pemilik".
 
 ### Scene sintetis untuk uji geometri
 
@@ -110,10 +102,9 @@ geometri, bukan memperagakan kuku.
 | ![Scene uji tanpa jenis koin](samples/contoh-04-tanpa-jenis-koin.jpg) | ![Hasil anotasi](samples/hasil-tanpa-jenis-koin.jpg) |
 
 Pada gambar hasil, angka mm diberi label "objek uji", bukan "kuku", karena memang bukan kuku.
-Koin yang terdeteksi tetap koin asli (foto domain publik) yang ditempel pada radius pasti.
 
-Gambar hasil dan JSON di bawah dibuat oleh `scripts/make_samples.py` yang memanggil pipeline
-yang sama seperti layanan, bukan ditulis tangan.
+Gambar hasil dibuat oleh `scripts/make_samples.py` yang memanggil pipeline yang sama seperti
+layanan, bukan ditulis tangan.
 
 ## Contoh input & output
 
@@ -142,20 +133,20 @@ curl -X POST http://localhost:8000/v1/analyze \
   "coin": {
     "found": true,
     "center_px": [
-      1120.3,
-      541.2
+      1120.5,
+      541.3
     ],
     "radius_px": 121.2,
-    "diameter_px": 242.4,
-    "score": 0.928,
+    "diameter_px": 242.3,
+    "score": 0.925,
     "alternatives": [],
     "type": "500",
-    "diameter_mm": 27.0
+    "diameter_mm": 27.1
   },
-  "scale_px_per_mm": 8.9785,
+  "scale_px_per_mm": 8.9414,
   "nail": {
     "width_px": 118.8,
-    "width_mm": 13.23,
+    "width_mm": 13.29,
     "suggestion": {
       "size": null,
       "reason": "tabel konversi ukuran pemilik belum diisi",
@@ -163,12 +154,12 @@ curl -X POST http://localhost:8000/v1/analyze \
     }
   },
   "warnings": [],
-  "elapsed_ms": 145.3
+  "elapsed_ms": 185.7
 }
 ```
 
 Fotonya asli 1600×1200 dengan koin 242,4 px; skala sebenarnya 9,0 px/mm, jadi error skala
-0,24% dan lebar kuku 13,23 mm (sebenarnya 13,2 mm). `suggestion.size` masih `null` karena
+0,65% dan lebar kuku 13,29 mm (sebenarnya 13,2 mm). `suggestion.size` masih `null` karena
 tabel konversi pemilik belum diisi — layanan sengaja tidak menebak.
 
 ### 2. Foto buram
@@ -198,7 +189,7 @@ curl -X POST http://localhost:8000/v1/analyze \
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 41.9
+  "elapsed_ms": 53.1
 }
 ```
 
@@ -231,16 +222,16 @@ curl -X POST http://localhost:8000/v1/analyze \
       539.9
     ],
     "radius_px": 52.4,
-    "diameter_px": 104.8,
-    "score": 0.99,
+    "diameter_px": 104.9,
+    "score": 0.987,
     "alternatives": [],
     "type": "100",
     "diameter_mm": 23.0
   },
-  "scale_px_per_mm": 4.5567,
+  "scale_px_per_mm": 4.5607,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 59.5
+  "elapsed_ms": 89.2
 }
 ```
 
@@ -273,18 +264,18 @@ curl -X POST http://localhost:8000/v1/analyze \
   "coin": {
     "found": true,
     "center_px": [
-      1120.3,
+      1120.2,
       541.7
     ],
-    "radius_px": 149.4,
+    "radius_px": 149.5,
     "diameter_px": 298.9,
-    "score": 0.878,
+    "score": 0.887,
     "alternatives": []
   },
   "scale_px_per_mm": null,
   "nail": null,
   "warnings": [],
-  "elapsed_ms": 165.8
+  "elapsed_ms": 123.8
 }
 ```
 
@@ -414,13 +405,17 @@ width_mm, suggestion}`, `warnings[]`, `elapsed_ms`.
 
 Diameter koin (sumber: Wikipedia "Uang koin rupiah"; perlu dikonfirmasi ke pemilik):
 
-| Nominal | Diameter | Tebal | Berat | Tahun |
+| Nominal | Diameter dipakai | Per seri (tabel pemilik) | Tebal | Berat |
 |---|---|---|---|---|
-| Rp50 | 20 mm | 2,00 mm | 1,36 g | 1999 |
-| Rp100 | 23 mm | 2,00 mm | 1,79 g | 1999, 2016 |
-| Rp200 | 25 mm | 2,20 mm | 2,38 g | 2003, 2016 |
-| Rp500 | 27 mm | 2,35 mm | 3,10 g | 2003, 2016 |
-| Rp1000 | 24 mm | 1,45 mm | 4,50 g | 2010, 2016 |
+| Rp50 | 20,00 mm | — | 2,00 mm | 1,36 g |
+| Rp100 | 23,00 mm | TE2016 23,00 | 2,00 mm | 1,79 g |
+| Rp200 | 25,00 mm | TE2003 25,00 · TE2016 25,00 | 2,20 mm | 2,38 g |
+| Rp500 | 27,10 mm | TE2003 27,00 · TE2016 27,20 | 2,35 mm | 3,10 g |
+| Rp1000 | 24,10 mm | TE2016 24,10 | 1,45 mm | 4,50 g |
+
+Sumber: `referensi_diameter_koin.csv` dari paket data pemilik (Peraturan BI), bukan Wikipedia.
+Rp500 dipakai 27,10 mm karena emisi sering tidak terbaca di foto; seri yang pasti disimpan di
+`SERIES` untuk pemakaian yang lebih teliti.
 
 Ambang gerbang kualitas (`dinail_ai/quality.py`):
 
@@ -438,12 +433,12 @@ yang sama. Ini bukan akurasi pada foto asli — lihat bagian "Uji dengan foto as
 
 | file | koin | skala asli | terdeteksi | error | lebar asli | terdeteksi | error | vonis |
 |---|---|---|---|---|---|---|---|---|
-| g1_500 | Rp500 | 6,0 px/mm | 5,991 | 0,14% | 11,5 mm | 11,52 mm | 0,02 mm | lolos |
-| g2_500 | Rp500 | 9,0 px/mm | 8,979 | 0,24% | 13,2 mm | 13,23 mm | 0,03 mm | lolos |
-| g3_1000 | Rp1000 | 7,5 px/mm | 7,463 | 0,50% | 14,0 mm | 14,07 mm | 0,07 mm | lolos |
-| g4_200 | Rp200 | 12,0 px/mm | 11,955 | 0,38% | 15,5 mm | 15,56 mm | 0,06 mm | lolos |
-| g5_100 | Rp100 | 4,5 px/mm | 4,557 | 1,26% | 10,4 mm | 10,27 mm | 0,13 mm | ditolak (koin 105 px) |
-| g6_1000 | Rp1000 | 14,0 px/mm | 13,877 | 0,88% | 16,8 mm | 16,95 mm | 0,15 mm | lolos |
+| g1_500 | Rp500 | 6,0 px/mm | 5,966 | 0,57% | 11,5 mm | 11,57 mm | 0,07 mm | lolos |
+| g2_500 | Rp500 | 9,0 px/mm | 8,941 | 0,65% | 13,2 mm | 13,29 mm | 0,09 mm | lolos |
+| g3_1000 | Rp1000 | 7,5 px/mm | 7,436 | 0,85% | 14,0 mm | 14,12 mm | 0,12 mm | lolos |
+| g4_200 | Rp200 | 12,0 px/mm | 11,958 | 0,35% | 15,5 mm | 15,55 mm | 0,05 mm | lolos |
+| g5_100 | Rp100 | 4,5 px/mm | 4,561 | 1,35% | 10,4 mm | 10,26 mm | 0,14 mm | ditolak (koin 105 px) |
+| g6_1000 | Rp1000 | 14,0 px/mm | 13,822 | 1,27% | 16,8 mm | 17,02 mm | 0,22 mm | lolos |
 
 Angka ini mengukur **geometri dan gerbangnya**, bukan akurasi pada foto pelanggan dinail.co:
 untuk itu perlu foto berlabel dari pemilik plus penggaris sebagai pembanding.
@@ -465,5 +460,8 @@ ditolak. Versi per petak memberi 380–510 untuk foto yang sama, sedangkan foto 
 
 ## Lisensi data uji
 
-Foto koin di `fixtures/` berasal dari Wikimedia Commons (domain publik) dan hanya dipakai
-untuk menguji detektor. Data penjualan dan foto pelanggan dinail.co tidak ada di repo ini.
+- Foto koin di `fixtures/` dan `samples/koin/`: Wikimedia Commons, domain publik.
+- Foto tangan di `samples/real/`: CC BY 2.0, atribusi di `samples/real/ATTRIBUTION.md`.
+- Foto di `samples/asli/`: milik dinail.co, dipakai dengan izin pemilik untuk capstone
+  A26-CS222. EXIF dihapus; tidak ada wajah, nama, atau nomor pesanan di dalamnya.
+- Data penjualan (828 transaksi) dan 32 foto mentah pemilik tidak ada di repo ini.
